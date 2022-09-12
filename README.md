@@ -1,5 +1,3 @@
-# vueproj
-
 ## Project setup
 ```
 npm install

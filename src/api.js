@@ -12,9 +12,16 @@ async function doHeadRequest(){
 
 }
 async function postRequest(){ 
+	let dates= new Date();
+	let month = dates.getUTCMonth() + 1;
+	let day = dates.getUTCDate();
+	let year = dates.getUTCFullYear();
+	let currentDate = year + "-" + month + "-" + day;
+	
 	var xmlBodyStr = `
 		<QuestionDto>
 			<questionMessage value="dkdkdkd">axios란 무엇입니깡?</questionMessage>
+			<date>2022-09-24T10:24:30.124+09:00</date>
 		</QuestionDto>`;
 
 	var config = {
@@ -117,8 +124,8 @@ async function getRequest(){
 }
 
 //doHeadRequest();
-//postRequest();
+postRequest();
 //postPosts();
 //postPostsForm();
-postPostsUrlEncodedForm();
+//postPostsUrlEncodedForm();
 //getRequest();

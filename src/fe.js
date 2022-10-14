@@ -1,6 +1,6 @@
 function walkSync(currentDirPath, callback){
     var fs = require('fs');
-    path = require('path');
+    var path = require('path');
 
     fs.readdirSync(currentDirPath).forEach(function(name){
         var filePath = path.join(currentDirPath,name);
@@ -17,8 +17,13 @@ function walkSync(currentDirPath, callback){
 
 if (process.argv.length === 3){
     const filename = process.argv[2];
+    var fileList = [];
 
     walkSync(filename, function(filePath, stat){
-        console.log(filePath);
+        //console.log(filePath);
+        fileList.push(filePath);
     });
 }
+
+fileList.forEach(file => console.log(file));
+console.log(fileList.length);

@@ -46,7 +46,10 @@ const traverseTest = (babel) => {
 	return {
 		visitor: {
 			CallExpression(path,state){
-				console.log(path.node.callee.property.name+" called... at file : "+process.argv[2]+ " and line "+path.node.loc.start.line+ ", state : "+state.scope);
+				if (path.node.callee.type === "Identifier")
+					console.log(path.node.callee.name+" case 1 called... at file : "+process.argv[2]+ " and line "+path.node.loc.start.line+ ", state : "+state.scope);
+				else 
+					console.log(path.node.callee.property.name+" case 2 called... at file : "+process.argv[2]+ " and line "+path.node.loc.start.line+ ", state : "+state.scope);
 				//console.log("@@@@@@ "+path.node.name, ","+path.node.type);
 				//inScope(path.scope, path.node.name);
 				

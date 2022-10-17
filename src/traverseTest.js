@@ -78,14 +78,31 @@ const traverseTest = (babel) => {
 					
 				}
 				
-				//path.findParent((path) => path.isFunctionDeclaration());
-				const parentFunction = path.getFunctionParent();
-				console.log("parent function name : "+parentFunction.node.id.name);
+				const parentFunctionPath = path.findParent((path) => path.isFunctionDeclaration());
+				//const parentFunction = path.getFunctionParent();
+				if(parentFunctionPath)
+					console.log("parent function name : "+parentFunction.node.id.name);
 				
 				scope.traverse(node,traverseHandler,this);
 				
+			},
+			FunctionDeclaration(path,state){
+				var fileName = (process.argv[2]).replaceAll("\\","\\\\");
+				const {node , scope} = path;
 				
+				const functionName = path.node.id.name;
+				const params = path.node.params;
 				
+				const parentFunctionPath = path.findParent((path) => path.isFunctionDeclaration());
+				var parentFunction;
+				
+				//const parentFunction = path.getFunctionParent();
+				if(parentFunctionPath)
+					//console.log("parent function name : "+parentFunction.node.id.name);
+					parentFunction = parentFunctionPath.node.id.name;
+				else
+					parentFunction = "";
+				console.log(fileName+","+functionName+","+parentFunction+","+params.length+","+path.node.loc.start.line);
 			}
 		}
 	}

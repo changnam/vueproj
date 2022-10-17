@@ -10,8 +10,8 @@ const traverseSample = (babel) => {
 					.unshiftContainer(
 					'body',
 						t.callExpression(
-							t.memberExpression(t.identifier('console'), t.identifier('time')),
-							[t.stringLiteral(path.node.id.name)]
+							t.memberExpression(t.identifier('factory'), t.identifier('consoleprint')),
+							[t.stringLiteral(path.node.id.name+ " started.")]
 						)
 					);
 			},
@@ -20,8 +20,8 @@ const traverseSample = (babel) => {
 			  const blockStatement = path.get('body')
 			  const lastExpression = blockStatement.get('body').pop();
 			  const timeEndStatement = t.callExpression(
-				t.memberExpression(t.identifier('console'), t.identifier('timeEnd')),
-				[t.stringLiteral(path.node.id.name)]
+				t.memberExpression(t.identifier('factory'), t.identifier('consoleprint')),
+				[t.stringLiteral(path.node.id.name+" ended.")]
 			  );
 
 			  if (lastExpression.type !== 'ReturnStatement') {

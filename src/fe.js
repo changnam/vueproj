@@ -25,5 +25,11 @@ if (process.argv.length === 3){
     });
 }
 
-fileList.forEach(file => console.log(file));
-console.log(fileList.length);
+//fileList.forEach(file => console.log(file));
+//fileList.forEach(file => console.log("node runBabelPlugin.js "+file));
+fileList.map(function(file){
+	if (file.substr(file.lastIndexOf(".")+1,file.length) === "js")
+	console.log("node runBabelPlugin.js "+file);
+});
+
+//console.log(fileList.length);

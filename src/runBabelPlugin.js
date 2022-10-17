@@ -12,10 +12,11 @@ if (process.argv.length === 3) {
 	
 	const output = babel.transformSync(source, {
 		plugins:[
-		 //[traverseTest,{scope: "testval"}]
-		 [traverseSample,{scope: "testval"}]
+		 [traverseTest,{scope: "testval"}]
+		 //[traverseSample,{scope: "testval"}]
 		]
 	}).code;
 	
-	fs.writeFileSync(`${__dirname}/output.js`, output);
+	//fs.writeFileSync(`${__dirname}/output.js`, output);
+	//fs.writeFileSync(filename,output);
 }

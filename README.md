@@ -41,7 +41,6 @@ var	strInput;
 
 xFrameBrowser.exe 는 windows desktop 어플리케이션임 , 설정을 통해서 border, title, 창의 size를 제어함. 엔진설정도 함. disable , mandatory color, console trace 띄울지여부, 소스를 어떻게 가져올지 (FILE, DB, WEB), 그리고 main 화면을 뭐로 할지.
 factory.loadscreen("/screen1") -- main 화면을 바꾼다.
-
 ```
 
 ### Customize configuration

@@ -46,10 +46,35 @@ const traverseTest = (babel) => {
 	return {
 		visitor: {
 			CallExpression(path,state){
+				const {scope, node } = path;
+				
+				const traverseHandler = {
+					
+					Identifier(path,state){
+						let parentCallPath = path.find((path) => path.isCallExpression());
+						//let parentCallPath = path.getStatementParent();
+						//let parentCallPath = path.parentPath;
+						//console.log("%%%% parent type: "+path.parent.type+", parent hash: "+hashcode(path.parent)+", state.node.type: "+state.node.type+", state.node.hash: "+hashcode(state.node));
+						//let parentMemberExpression = path.find((path) => path.isMemberExpression());
+						//console.log("------------------------- "+path.node.name+" ### "+path.node.loc.start.line+","+path.node.loc.start.column+", parentCallPath hash: "+hashcode(parentCallPath.node)+" , state.node hash : "+hashcode(state.node));
+						//if (parentCallPath && parentCallPath == state.path) {
+						//	console.log("------------------------- "+path.node.name+" @@@ "+parentCallPath.node.loc.start.line+","+parentCallPath.node.loc.start.column);
+						//}
+						if (parentCallPath.node == state.node) {
+							console.log("------------------------- "+path.node.name+" @@@ "+parentCallPath.node.loc.start.line+","+parentCallPath.node.loc.start.column);
+						}
+					},
+					
+					
+				}
+				
 				if (path.node.callee.type === "Identifier")
-					console.log(path.node.callee.name+" case 1 called... at file : "+process.argv[2]+ " and line "+path.node.loc.start.line+ ", state : "+state.scope);
-				else 
-					console.log(path.node.callee.property.name+" case 2 called... at file : "+process.argv[2]+ " and line "+path.node.loc.start.line+ ", state : "+state.scope);
+					console.log(path.node.callee.name+" case 1 called... at file : "+process.argv[2]+ " and line "+path.node.loc.start.line+ ", state : "+state.opts.scope);
+				else {
+					console.log("++++++++++++++++++++++++++++++++++ getName  " + getName(path.node.callee));
+					console.log(path.node.callee.property.name+" case 2 called... at file : "+process.argv[2]+ " and line "+path.node.loc.start.line+ ", state : "+state.opts.scope);
+					path.traverse(traverseHandler,{node : path.node});
+				}
 				//console.log("@@@@@@ "+path.node.name, ","+path.node.type);
 				//inScope(path.scope, path.node.name);
 				
@@ -67,25 +92,19 @@ const traverseTest = (babel) => {
 				//console.log("argument 갯수 : "+path.node.arguments.length);
 				console.log("argument 갯수 : "+functionArguments.length);
 				
-				return;
+				//return;
 				
-				const {scope, node } = path;
 				
-				const traverseHandler = {
-					Identifier(path,state){
-						console.log("------------------------- "+path.node.name);
-					},
-					
-				}
 				
 				const parentFunctionPath = path.findParent((path) => path.isFunctionDeclaration());
 				//const parentFunction = path.getFunctionParent();
 				if(parentFunctionPath)
-					console.log("parent function name : "+parentFunction.node.id.name);
+					console.log("parent function name : "+parentFunctionPath.node.id.name);
+				//state.path = path;
+				//path.scope.push({compval: "xxx"});
+				//scope.traverse(node,traverseHandler,this);
 				
-				scope.traverse(node,traverseHandler,this);
-				
-			},
+			},/*
 			FunctionDeclaration(path,state){
 				var fileName = (process.argv[2]).replaceAll("\\","\\\\");
 				const {node , scope} = path;
@@ -103,9 +122,35 @@ const traverseTest = (babel) => {
 				else
 					parentFunction = "";
 				console.log(fileName+","+functionName+","+parentFunction+","+params.length+","+path.node.loc.start.line);
-			}
+			}*/
 		}
 	}
+}
+
+function hashcode(obj) {
+    var hc = 0;
+    var chars = JSON.stringify(obj).replace(/\{|\"|\}|\:|,/g, '');
+    var len = chars.length;
+    for (var i = 0; i < len; i++) {
+        // Bump 7 to larger prime number to increase uniqueness
+        hc += (chars.charCodeAt(i) * 7);
+    }
+    return hc;
+}
+
+function getName(node) {
+  let name = ''
+
+  switch (node.type) {
+    case 'Identifier':
+      name = node.name
+      break
+    case 'MemberExpression':
+      name = `${getName(node.object)}.${getName(node.property)}`
+      break
+  }
+
+  return name
 }
 
 module.exports = traverseTest;

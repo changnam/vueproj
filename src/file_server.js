@@ -13,13 +13,14 @@ http.createServer(function (req, res) {
       var newpath = 'C:/Users/Chang/' + files.file.originalFilename;
       fs.rename(oldpath, newpath, function (err) {
         if (err) throw err;
+		res.setHeader("Content-Type", "text/html");
         res.write('successSaveFileName=stress.csv');
         res.end();
       });
  });
   } else {
     res.writeHead(200, {'Content-Type': 'text/html'});
-    res.write('<form action="fileupload" method="post" enctype="multipart/form-data">');
+    res.write('<form action="uploadFile" method="post" enctype="multipart/form-data">');
     res.write('<input type="file" name="file"><br>');
     res.write('<input type="submit">');
     res.write('</form>');

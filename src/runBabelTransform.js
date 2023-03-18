@@ -26,6 +26,7 @@ if (process.argv.length === 3) {
 	
 	const output = babel.traverse(ast,{
 		enter(path) {
+			
 			if(t.isFunctionDeclaration(path.node)) {
 				path
 					.get('body')
@@ -36,7 +37,10 @@ if (process.argv.length === 3) {
 							[t.stringLiteral(filename+": "+path.node.id.name+ " started. ")]
 							//[t.stringLiteral(filename+": "+path.node.id.name+ " started. caller : +"+path.node.id.name+".caller.toString().substring(1,30))")]
 						)
-						/*
+					);
+			}
+			
+									/*
 						t.callExpression(
 							t.memberExpression(t.identifier('factory'), t.identifier('consoleprint')),
 							[t.binaryExpression('+', t.stringLiteral(filename+": "+path.node.id.name+ " started. caller : "),
@@ -46,8 +50,17 @@ if (process.argv.length === 3) {
 						)
 						//t.memberExpression(t.callExpression(t.memberExpression(t.identifier(path.node.id.name),t.identifier('caller')),t.identifier('toString')),t.identifier('substring')),[t.stringLiteral("1"),t.stringLiteral("30")]))
 						*/
-					);
+						
+			if(t.isCallExpression(path.node)){
+				//console.log("=============== isCallExpression ");
+				if(path.node.callee.property && path.node.callee.property.hasOwnProperty('name') && path.node.callee.property.name === 'loadpopup'){
+				 //console.log("====================> "+path.node.callee.property.name );
+				 path.insertBefore(t.callExpression(t.memberExpression(t.identifier('factory'), t.identifier('consoleprint')),
+							[t.stringLiteral(filename+":  loading popup")]));
+				 path.skip();
+				}
 			}
+			
 		}
 	});
 	

@@ -56,10 +56,19 @@ if (process.argv.length === 3) {
 			if(t.isCallExpression(path.node)){
 				//console.log("=============== isCallExpression ");
 				if(path.node.callee.property && path.node.callee.property.hasOwnProperty('name') && path.node.callee.property.name === 'loadpopup'){
-				 //console.log("====================> "+path.node.callee.property.name );
-				 path.insertBefore(t.callExpression(t.memberExpression(t.identifier('factory'), t.identifier('consoleprint')),
+					const parentFunctionPath = path.findParent((path) => path.isVariableDeclaration());
+					if(!parentFunctionPath) {
+						//console.log("====================> "+path.node.callee.property.name );
+						//console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@ not varialbedeclarator "+path.parent.type);
+						path.insertBefore(t.callExpression(t.memberExpression(t.identifier('factory'), t.identifier('consoleprint')),
 							[t.stringLiteral(filename+":  loading popup")]));
-				 path.skip();
+						path.skip();
+					} else {
+							//console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@ variabledeclarator "+path.parent.type);
+							parentFunctionPath.insertBefore(t.callExpression(t.memberExpression(t.identifier('factory'), t.identifier('consoleprint')),
+							[t.stringLiteral(filename+":  loading popup")]));
+							path.skip();
+					}
 				}
 			}
 			

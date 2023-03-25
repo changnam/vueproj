@@ -35,7 +35,7 @@ if (process.argv.length === 3) {
 						t.callExpression(
 							t.memberExpression(t.identifier('factory'), t.identifier('consoleprint')),
 							//[t.stringLiteral(filename+": "+path.node.id.name+ " started. ")]
-							[t.binaryExpression('+',t.updateExpression('++',t.identifier('cntStep')), t.stringLiteral(filename+": "+path.node.id.name+ " started."))]
+							[t.binaryExpression('+',t.updateExpression('++',t.memberExpression(t.identifier('CCNConst'),t.identifier('cntStep')),true), t.stringLiteral("|-|"+filename+"|-|"+path.node.id.name+ "|-| started."))]
 							//[t.stringLiteral(filename+": "+path.node.id.name+ " started. caller : +"+path.node.id.name+".caller.toString().substring(1,30))")]
 						)
 					);

@@ -4,7 +4,15 @@ const traverseSample = (babel) => {
 	return {
 	  visitor: {
 		FunctionDeclaration:{
+
 			enter(path) {
+				const code = `
+					for( var i =0 ; i<arguments.length; i++){
+						if (typeof arguments[i]=== 'string'){
+							factory.consoleprint(arguments[i]);
+						}
+					}
+				`;
 				path
 					.get('body')
 					.unshiftContainer(
@@ -14,6 +22,8 @@ const traverseSample = (babel) => {
 							[t.stringLiteral(path.node.id.name+ " started.")]
 						)
 					);
+					path.get('body').unshiftContainer('body', t.expressionStatement(t.stringLiteral('before')));
+					path.get('body').unshiftContainer('body', babel.parse(code).program);
 			},
 			exit(path) {
 			  // check last expression from BlockStatement

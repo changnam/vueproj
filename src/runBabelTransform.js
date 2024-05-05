@@ -72,7 +72,27 @@ if (process.argv.length === 3) {
 				}
 			}
 			
-		}
+		},
+		exit(path){
+			if(t.isFunctionDeclaration(path.node)) {
+			  // check last expression from BlockStatement
+			  const blockStatement = path.get('body')
+			  const lastExpression = blockStatement.get('body').pop();
+			  const timeEndStatement = t.callExpression(
+								t.memberExpression(t.identifier('factory'), t.identifier('consoleprint')),
+								//[t.stringLiteral(filename+": "+path.node.id.name+ " started. ")]
+								[t.binaryExpression('+',t.updateExpression('++',t.memberExpression(t.identifier('CCNConst'),t.identifier('cntStep')),true), t.stringLiteral("|-|"+filename+"|-|"+path.node.id.name+ "|-| ended."))]
+								//[t.stringLiteral(filename+": "+path.node.id.name+ " started. caller : +"+path.node.id.name+".caller.toString().substring(1,30))")]
+								);
+
+			  if (lastExpression.type !== 'ReturnStatement') {
+				lastExpression.insertAfter(timeEndStatement);
+			  } else {
+				lastExpression.insertBefore(timeEndStatement);
+			  }
+			}
+        }		
+		
 	});
 	
 	// "+getValue.caller.toString().substring(1,30))"

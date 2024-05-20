@@ -9,9 +9,12 @@ const traverseSample = require('./traverseSample');
 const callee_name = require('./callee_name');
 
 var t = babel.types;
-
+var lvl = 1;
 if (process.argv.length === 3) {
 	const filename = process.argv[2];
+	//
+	//const content = fs.readFileSync(filename);
+	//const source = iconv.decode(content, "euc-kr");
 	
 	const source = fs.readFileSync(filename,'utf8');
 	console.log("filename: "+filename);
@@ -28,6 +31,22 @@ if (process.argv.length === 3) {
 		enter(path) {
 			
 			if(t.isFunctionDeclaration(path.node)) {
+				const code = `
+					for (var i=0; i<arguments.length; i++) {
+						if(typeof arguments[i] === 'string') {
+							CCNLog.traceLog(6,i + " ===> "+arguments[i]);
+						} else if(typeof arguments[i] === 'boolean') {
+							CCNLog.traceLog(6,i + " ===> "+arguments[i].toString());
+						} else if(typeof arguments[i] === 'number') {
+							CCNLog.traceLog(6,i + " ===> "+arguments[i].toString());
+						}
+					}
+				`;
+				const filepath = filename.replace(/\\/g,"\\\\");
+				const counter = "CCNConst.cntStep++";
+				const codeStart = `CCNLog.traceLog(${lvl}, ${counter} +" ${filepath} - ${path.node.id.name} started.");`;
+				path.get('body').unshiftContainer('body',babel.parse(code).program);
+				/*
 				path
 					.get('body')
 					.unshiftContainer(
@@ -39,6 +58,8 @@ if (process.argv.length === 3) {
 							//[t.stringLiteral(filename+": "+path.node.id.name+ " started. caller : +"+path.node.id.name+".caller.toString().substring(1,30))")]
 						)
 					);
+				*/
+				path.get('body').unshiftContainer('body',babel.parse(codeStart).program);
 			}
 			
 									/*
@@ -76,15 +97,21 @@ if (process.argv.length === 3) {
 		exit(path){
 			if(t.isFunctionDeclaration(path.node)) {
 			  // check last expression from BlockStatement
+			  const filepath = filename.replace(/\\/g,"\\\\");
+			  const counter = "CCNConst.cntStep++";
+			  const codeEnd = `CCNLog.traceLog(${lvl}, ${counter} +" ${filepath} - ${path.node.id.name} ended.");`;
+				
 			  const blockStatement = path.get('body')
 			  const lastExpression = blockStatement.get('body').pop();
+			  const timeEndStatement = babel.parse(codeEnd).program;
+			  /*
 			  const timeEndStatement = t.callExpression(
 								t.memberExpression(t.identifier('factory'), t.identifier('consoleprint')),
 								//[t.stringLiteral(filename+": "+path.node.id.name+ " started. ")]
 								[t.binaryExpression('+',t.updateExpression('++',t.memberExpression(t.identifier('CCNConst'),t.identifier('cntStep')),true), t.stringLiteral("|-|"+filename+"|-|"+path.node.id.name+ "|-| ended."))]
 								//[t.stringLiteral(filename+": "+path.node.id.name+ " started. caller : +"+path.node.id.name+".caller.toString().substring(1,30))")]
 								);
-
+				*/
 			  if (lastExpression.type !== 'ReturnStatement') {
 				lastExpression.insertAfter(timeEndStatement);
 			  } else {

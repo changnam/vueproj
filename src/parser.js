@@ -1,6 +1,7 @@
 const fs = require('fs');
 const babel = require('@babel/core');
 const syntaxJsx = require('@babel/plugin-syntax-jsx')
+const presetReact = require('@babel/preset-react');
 
 var src = `var a = 1; // pathA, path.key = 0
 var b = 2; // pathB, path.key = 1
@@ -18,6 +19,7 @@ if (process.argv.length === 3){
 		babelrc: false,
 		configFile: false,
 		ast: true,
+		presets: [presetReact],
 		parserOpts: {
 				plugins: [],
 		},

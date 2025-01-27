@@ -1,5 +1,6 @@
 const fs = require('fs');
 const babel = require('@babel/core');
+const presetReact = require('@babel/preset-react');
 const generate = require('@babel/generator').default;
 const iconv = require('iconv-lite');
 
@@ -22,7 +23,9 @@ if (process.argv.length === 3) {
 	//console.log(source.toString());
 	//const content = iconv.decode(source,'euc-kr');
 	//console.log(content);
-	const ast = babel.parse(source);
+	const ast = babel.parse(source,{
+			presets: [presetReact], // Apply the preset to parse JSX
+		});
 	//console.log(ast);
 	//const {code, map} = generate(ast,{},source);
 	//fs.writeFileSync(filename,'\ufeff'+code,{encoding : 'utf8'} );
@@ -120,7 +123,7 @@ if (process.argv.length === 3) {
 			}
         }		
 		
-	});
+	},{"processedFlag" : false});
 	
 	// "+getValue.caller.toString().substring(1,30))"
 	//fs.writeFileSync(`${__dirname}/output.js`, output);

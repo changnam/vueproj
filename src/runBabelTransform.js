@@ -29,10 +29,11 @@ if (process.argv.length === 3) {
 	//console.log(ast);
 	//const {code, map} = generate(ast,{},source);
 	//fs.writeFileSync(filename,'\ufeff'+code,{encoding : 'utf8'} );
-	
+	var cnt = 0;
 	const output = babel.traverse(ast,{
 		enter(path) {
-			
+			cnt++;
+			console.log(cnt + path.node.type+","+path.node.name);
 			if(t.isFunctionDeclaration(path.node)) {
 				const code = `
 					for (var i=0; i<arguments.length; i++) {
@@ -98,6 +99,8 @@ if (process.argv.length === 3) {
 			
 		},
 		exit(path){
+			cnt--;
+			console.log(cnt + path.node.type+","+path.node.name);
 			if(t.isFunctionDeclaration(path.node)) {
 			  // check last expression from BlockStatement
 			  const filepath = filename.replace(/\\/g,"\\\\");

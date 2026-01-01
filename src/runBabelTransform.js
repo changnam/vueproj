@@ -1,6 +1,5 @@
 const fs = require('fs');
 const babel = require('@babel/core');
-const presetReact = require('@babel/preset-react');
 const generate = require('@babel/generator').default;
 const iconv = require('iconv-lite');
 
@@ -10,46 +9,99 @@ const traverseSample = require('./traverseSample');
 const callee_name = require('./callee_name');
 
 var t = babel.types;
-var lvl = 1;
+
 if (process.argv.length === 3) {
 	const filename = process.argv[2];
 	//
-	//const content = fs.readFileSync(filename);
-	//const source = iconv.decode(content, "euc-kr");
+	const content = fs.readFileSync(filename);
+	const source = iconv.decode(content, "euc-kr");
 	
-	const source = fs.readFileSync(filename,'utf8');
+	//const source = fs.readFileSync(filename,'utf8');
 	console.log("filename: "+filename);
 	//fs.writeFileSync(filename,source,{encoding : 'utf8'} );
 	//console.log(source.toString());
 	//const content = iconv.decode(source,'euc-kr');
 	//console.log(content);
-	const ast = babel.parse(source,{
-			presets: [presetReact], // Apply the preset to parse JSX
-		});
+	const ast = babel.parse(source);
 	//console.log(ast);
 	//const {code, map} = generate(ast,{},source);
 	//fs.writeFileSync(filename,'\ufeff'+code,{encoding : 'utf8'} );
-	var cnt = 0;
+	
 	const output = babel.traverse(ast,{
 		enter(path) {
-			cnt++;
-			console.log(cnt + path.node.type+","+path.node.name);
+			if (t.isProgram(path.node)){
+				console.log("@@@@@@@@@@@@@@@@@@@@ Entering Program, start:" +path.node.loc.start.line+",end: "+path.node.loc.end.line);
+			}
+			
 			if(t.isFunctionDeclaration(path.node)) {
 				const code = `
 					for (var i=0; i<arguments.length; i++) {
 						if(typeof arguments[i] === 'string') {
-							CCNLog.traceLog(6,i + " ===> "+arguments[i]);
+							SYSLog.log(1,i + " ===> "+arguments[i]);
 						} else if(typeof arguments[i] === 'boolean') {
-							CCNLog.traceLog(6,i + " ===> "+arguments[i].toString());
+							SYSLog.log(1,i + " ===> "+arguments[i].toString());
 						} else if(typeof arguments[i] === 'number') {
-							CCNLog.traceLog(6,i + " ===> "+arguments[i].toString());
+							SYSLog.log(1,i + " ===> "+arguments[i].toString());
 						}
 					}
 				`;
+				//테스트
 				const filepath = filename.replace(/\\/g,"\\\\");
-				const counter = "CCNConst.cntStep++";
-				const codeStart = `CCNLog.traceLog(${lvl}, ${counter} +" ${filepath} - ${path.node.id.name} started.");`;
-				path.get('body').unshiftContainer('body',babel.parse(code).program);
+				const objscreen = "objscreen.getscreenid()";
+				const xDataSet = "xDataSet.getid()";
+				const div = "div.getname()";
+				const obj = "obj.getname()";
+				const val = "val";
+				const object = "object.getname()";
+				const enable = "enable";
+				const ojbTab = "ojbTab.getname()";
+				const ojbTabScreen = "ojbTab.getscreenid()";
+				const ojbTabCheck = "ojbTab.getobjectkind() == XFD_OBJKIND_SCREEN";
+				const objundefinedCheck = "obj.getcontrolkind() == XFD_CTRLKIND_FIELD || obj.getcontrolkind() == XFD_CTRLKIND_MULTILINE || obj.getcontrolkind() == XFD_CTRLKIND_COMBOBOX";
+				const objundefined = "obj.isundefined()";
+				var codeStart;
+				var addFlag = true;
+				if (path.node.id.name == "gfn_ds2div" || path.node.id.name == "gfn_ds2div2"){ 
+					codeStart = `
+						SYSLog.log(1,"${filepath} - ${path.node.id.name} - started. objscreen: "+${objscreen}+",xDataSet: "+${xDataSet}+",div: "+${div});
+					`
+				} else if (path.node.id.name == "gfn_div2ds"){ 
+				    codeStart = `
+						if (${ojbTabCheck})
+							SYSLog.log(1,"${filepath} - ${path.node.id.name} - started. objscreen: "+${objscreen}+",screen: "+${ojbTabScreen}+",xDataSet: "+${xDataSet});
+						else
+							SYSLog.log(1,"${filepath} - ${path.node.id.name} - started. objscreen: "+${objscreen}+",div: "+${ojbTab}+",xDataSet: "+${xDataSet});
+					`
+				} else if (path.node.id.name == "set_value" ){ 
+					codeStart = `
+						SYSLog.log(1,"${filepath} - ${path.node.id.name} - started. obj: "+${obj}+",val: "+${val});
+					`
+				} else if (path.node.id.name == "set_enable" ){ 
+					codeStart = `
+						SYSLog.log(1,"${filepath} - ${path.node.id.name} - started. object: "+${object}+",enable: "+${enable});
+					`
+				} else if (path.node.id.name == "xdatasetSetUndefined" ){ 
+					codeStart = `
+					    if (${objundefinedCheck})
+							SYSLog.log(1,"${filepath} - ${path.node.id.name} - started. obj: "+${obj}+",xDataSet: "+${xDataSet}+",obj undefined: "+${objundefined});
+						else
+							SYSLog.log(1,"${filepath} - ${path.node.id.name} - started. obj: "+${obj}+",xDataSet: "+${xDataSet});
+					`
+				} else if (path.node.id.name == "showDataSetLog" || filepath == "C:\\xFrame\\project\\DSI\\screen\\common_module\\nTreeUtil.js"){ 
+					//node replace (함수 replace) undefined 처리를 위함
+					//path.replace;
+					path.remove();
+					console.log("@@@@@@@@@@@@@@@@@@@@ removing showDataSetLog" );
+					addFlag = false;
+				} else {
+					codeStart = `
+						SYSLog.log(1,"${filepath} - ${path.node.id.name} - started. ");
+					`
+				}
+				if (addFlag) {
+					path.get('body').unshiftContainer('body',babel.parse(code).program);
+					path.get('body').unshiftContainer('body',babel.parse(codeStart).program);
+				}
 				/*
 				path
 					.get('body')
@@ -63,7 +115,6 @@ if (process.argv.length === 3) {
 						)
 					);
 				*/
-				path.get('body').unshiftContainer('body',babel.parse(codeStart).program);
 			}
 			
 									/*
@@ -99,16 +150,53 @@ if (process.argv.length === 3) {
 			
 		},
 		exit(path){
-			cnt--;
-			console.log(cnt + path.node.type+","+path.node.name);
 			if(t.isFunctionDeclaration(path.node)) {
-			  // check last expression from BlockStatement
-			  const filepath = filename.replace(/\\/g,"\\\\");
-			  const counter = "CCNConst.cntStep++";
-			  const codeEnd = `CCNLog.traceLog(${lvl}, ${counter} +" ${filepath} - ${path.node.id.name} ended.");`;
 				
+				const filepath = filename.replace(/\\/g,"\\\\");
+				const objscreen = "objscreen.getscreenid()";
+				const xDataSet = "xDataSet.getid()";
+				const div = "div.getname()";
+				const obj = "obj.getname()";
+				const val = "val";
+				const object = "object.getname()";
+				const enable = "enable";
+				const ojbTab = "ojbTab.getname()";
+				const ojbTabScreen = "ojbTab.getscreenid()";
+				const ojbTabCheck = "ojbTab.getobjectkind() == XFD_OBJKIND_SCREEN";
+				var codeEnd;
+				if (path.node.id.name == "gfn_ds2div" || path.node.id.name == "gfn_ds2div2"){ 
+					codeEnd = `
+						SYSLog.log(1,"${filepath} - ${path.node.id.name} - ended. objscreen: "+${objscreen}+",xDataSet: "+${xDataSet}+",div: "+${div});
+					`
+				} else if (path.node.id.name == "gfn_div2ds"){ 
+				    codeEnd = `
+						if (${ojbTabCheck})
+							SYSLog.log(1,"${filepath} - ${path.node.id.name} - ended. objscreen: "+${objscreen}+",screen: "+${ojbTabScreen}+",xDataSet: "+${xDataSet});
+						else
+							SYSLog.log(1,"${filepath} - ${path.node.id.name} - ended. objscreen: "+${objscreen}+",div: "+${ojbTab}+",xDataSet: "+${xDataSet});
+					`
+				} else if (path.node.id.name == "set_value" ){ 
+					codeEnd = `
+						SYSLog.log(1,"${filepath} - ${path.node.id.name} - ended. obj: "+${obj}+",val: "+${val});
+					`
+				} else if (path.node.id.name == "set_enable" ){ 
+					codeEnd = `
+						SYSLog.log(1,"${filepath} - ${path.node.id.name} - ended. object: "+${object}+",enable: "+${enable});
+					`
+				} else if (path.node.id.name == "xdatasetSetUndefined" ){ 
+					codeEnd = `
+						SYSLog.log(1,"${filepath} - ${path.node.id.name} - ended. obj: "+${obj}+",xDataSet: "+${xDataSet});
+					`
+				} else {
+					codeEnd = `
+						SYSLog.log(1,"${filepath} - ${path.node.id.name} - ended. ");
+					`
+				}
+				
+			  // check last expression from BlockStatement
 			  const blockStatement = path.get('body')
 			  const lastExpression = blockStatement.get('body').pop();
+			  //path.get('body').unshiftContainer('body',babel.parse(codeStart).program);
 			  const timeEndStatement = babel.parse(codeEnd).program;
 			  /*
 			  const timeEndStatement = t.callExpression(
@@ -126,7 +214,7 @@ if (process.argv.length === 3) {
 			}
         }		
 		
-	},{"processedFlag" : false});
+	});
 	
 	// "+getValue.caller.toString().substring(1,30))"
 	//fs.writeFileSync(`${__dirname}/output.js`, output);

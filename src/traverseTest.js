@@ -1,158 +1,140 @@
-function inScope(scope, nodename){
-	console.log("-- inScope "+scope+" , "+nodename);
-	if(!scope || !scope.bindings) return;
-	
-	let ret = false;
-	let cur = scope;
-	
-	while(cur){
-		console.log("in while "+cur);
-		ret = cur.bindings[nodename];
-		if (cur === scope.parent || ret){
-			break;
-		}
-		cur = scope.parent;
-	}
-	
-	return ret;
-}
-
 const traverseInProgram = {
-	ObjectExpression (path,state){
-		console.log("objectExpression "+path.node.properties.length);
-	},
-	Identifier(path,state){
-		//
-	},
-	VariableDeclaration(path,state){
-		//
-	},
 	CallExpression(path,state){
-		if(path.scope === state.opts.scope){
-			if(path.scope.hasBinding(path.node.callee.property.name)){
-				console.log("@@@@@@@@@@@@ CallExpression in global area at file : "+process.argv[2]+ " and line "+path.node.loc.start.line);
-			}
-		}else if (path.node.callee.type === "Identifier"){
-			if(path.scope.hasBinding(path.node.callee.name)){
-				console.log("@@@@@@@@CallExpression in global area at file : "+process.argv[2]+ " and line "+path.node.loc.start.line);
-			}
-		}
+	
+	
 	}
 }
 
 const traverseTest = (babel) => {
 	var t = babel.types;
-	
 	return {
 		visitor: {
-			CallExpression(path,state){
-				const {scope, node } = path;
+			Program(path,state){
+			},
+			
+			CallExpression(path,state) {
+				//console.log("call expression matched.."+path.type + " ast line: " +path.node.loc.start.line);
+				//console.log(path.node.callee.property.name);
+				//if(path.node.callee.property.name!= null) {
+				//  if(path.node.callee.property.name === "RTN_SCREEN_JUMP_WITH_DATA_COND_SEND") {
+				//    console.log("jump function matched.."+path.type + " ast line : "+path.node.loc.start.line);
+				//  } else if (path.node.callee.property.name === "RTN_SHOW_NORMAL_POPUP_BYINDEX") {
+				//    console.log("jump function matched.."+path.type+" ast line : "+path.node.loc.start.line);
+				//  }
+				//}
 				
-				const traverseHandler = {
-					
-					Identifier(path,state){
-						let parentCallPath = path.find((path) => path.isCallExpression());
-						//let parentCallPath = path.getStatementParent();
-						//let parentCallPath = path.parentPath;
-						//console.log("%%%% parent type: "+path.parent.type+", parent hash: "+hashcode(path.parent)+", state.node.type: "+state.node.type+", state.node.hash: "+hashcode(state.node));
-						//let parentMemberExpression = path.find((path) => path.isMemberExpression());
-						//console.log("------------------------- "+path.node.name+" ### "+path.node.loc.start.line+","+path.node.loc.start.column+", parentCallPath hash: "+hashcode(parentCallPath.node)+" , state.node hash : "+hashcode(state.node));
-						//if (parentCallPath && parentCallPath == state.path) {
-						//	console.log("------------------------- "+path.node.name+" @@@ "+parentCallPath.node.loc.start.line+","+parentCallPath.node.loc.start.column);
-						//}
-						if (parentCallPath.node == state.node) {
-							console.log("------------------------- "+path.node.name+" @@@ "+parentCallPath.node.loc.start.line+","+parentCallPath.node.loc.start.column);
-						}
-					},
-					
-					
-				}
+			var calleeName;
+			var fileName = (process.argv[2]).replaceAll("\\","\\\\");
+			
+			const {scope, node} = path;
+			
+			const traverseHandler = {
+				Identifier(path,state) {
+					//console.log("@@@@-------"+path.node.name+" , "+path.parentPath.node.type+","+state.path.node.type+" , path.inList : "+path.inList+"
+					//, path.parentPath.inList :"+path.parentPath.inList);
+					//const idPath = path;
+					const parentCallExpression = path.findParent((path) => path.isCallExpression());
+					//const isParentArgument = path.findParent((path) => path.isArgument
+					//if(t.isMemberExpression(path.parentPath) && JSON.stringify(path.parentPath.parentPath.node) === JSON.stringify(state.path.node)){
+					if(parentCallExpression == state.path && t.isMemberExpression(path.parent) && !path.inList && !path.parentPath.inList) {
+						//console.log("########### -------------------- " +path.node.name + " @@@ ");
+						memberName = memberName + "."+path.node.name;
+						//console.log("$$$$$$$$$$$$$$ "+JSON.stringify(parentCallExpression.node));
+					}
+				},
+			}
+			
+
+			if (path.node.callee.type == "Identifier") {
+				//console.log(process.argv[2]+","+path.node.callee.name + ","+path.node.loc.start.line);
+				calleeName = path.node.callee.name;
+			} else if (path.node.callee.type = "MemberExpression") {
+				//console.log(process.argv[2]+","+path.node.callee.property.name+","+path.node.loc.start.line);
+				//if (path.node.callee.property.type === 'Identifier')
+				calleeName = path.node.callee.property.name;
+				//calleeName = getName(path.node.callee);
+				//else
+				//  console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ not identifier"+path.node.callee.property.type);
 				
-				if (path.node.callee.type === "Identifier")
-					console.log(path.node.callee.name+" case 1 called... at file : "+process.argv[2]+ " and line "+path.node.loc.start.line+ ", state : "+state.opts.scope);
-				else {
-					console.log("++++++++++++++++++++++++++++++++++ getName  " + getName(path.node.callee));
-					console.log(path.node.callee.property.name+" case 2 called... at file : "+process.argv[2]+ " and line "+path.node.loc.start.line+ ", state : "+state.opts.scope);
-					path.traverse(traverseHandler,{node : path.node});
-				}
-				//console.log("@@@@@@ "+path.node.name, ","+path.node.type);
-				//inScope(path.scope, path.node.name);
-				
-				// 위의 호출된 함수명 출력하고 바로 return 함. 모든 함수에 대해서 한줄씩 찍히고 끝남 
-				//return;
-				
-				// 현재 path의 자식 노드들에 대해서 traversal 을 하지 않는다.
-				//path.skip();
-				
-				// traverse 자체를 멈춘다.
-				//path.stop();
-				
-				// callee 의 argument 는 배열임 (각 항목은 node type임)
-				const functionArguments = path.node.arguments;
-				//console.log("argument 갯수 : "+path.node.arguments.length);
-				console.log("argument 갯수 : "+functionArguments.length);
-				
-				//return;
-				
-				
-				
-				const parentFunctionPath = path.findParent((path) => path.isFunctionDeclaration());
-				//const parentFunction = path.getFunctionParent();
-				if(parentFunctionPath)
-					console.log("parent function name : "+parentFunctionPath.node.id.name);
 				//state.path = path;
-				//path.scope.push({compval: "xxx"});
-				//scope.traverse(node,traverseHandler,this);
-				
-			},/*
-			FunctionDeclaration(path,state){
+				//console.log("^^^^^^^^^^^^^^^^^^^^^^^^^^ "+state.opts[scope]+"  %%%%% "+ scope);
+				//scope.tarverse(node, traverseHandler, this);
+				var memberName = "";
+				//path.traverse(traverseHandler,{path: path});
+				memberName = getName(path.node.callee);
+				//console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! memberName: "+memberName);
+			}
+			const functionArguments = path.node.arguments;
+			//console.log("argument numbers: "+functionArguments.length)
+			var argumentsString = "";
+			for (var i=0;i<functionArguments.length;i++){
+				if(t.isIdentifier(functionArguments[i])){
+					//console.log("arguments "+i+" : "+functionArguments[i].name);
+					argumentsString = argumentsString.concat("!-!").concat(functionArguments[i].name);
+				} else if (t.isStringLiteral(functionArguments[i])||t.isBooleanLiteral(functionArguments[i])||t.isNumericLiteral(functionArguments[i])){
+					//console.log("arguments "+i+" : "+functionArguments[i].value);
+					argumentsString = argumentsString.concat("!-!").concat(functionArguments[i].type);
+				} else {
+					//console.log("arguments "+i+" : "+functionArguments[i].type);
+					argumentsString = argumentsString.concat("!-!").concat(functionArguments[i].type);
+				}
+			}
+			//console.log("@@@@@@@@@@@@@@@@@@@ full arguments : "+argumentsString.substr(1));
+			//return;
+			argumentsString = argumentsString.replace(/\n/g,"줄바꿈"); // 스트림에 \n 를 줄바꿈으로 치환한다.
+			argumentsString = argumentsString.replace(/\\/g,"\\\\"); // 스트림에 \ 를 \\ 로 치환한다. db에 insert 할때 \ 가 들어간다.
+			argumentsString = argumentsString.replace(/'/g,"\\'"); // 스트림에 ' 를 \' 로 치환한다. db에 insert 할때 ' 가 들어간다.
+
+			//const parentFunction = path.getFunctionParent();
+			// parent path 를 찾음
+			const parentFunction = path.findParent((path) => path.isFunctionDeclaration());
+
+			if(parentFunction)
+			  //console.log("parent function: "+parentFunction.id +","+parentFunction.node.id.name);
+			  //console.log("parent function name: 3 "+parentFunction.type+","+parentFunction.loc.start.line+","+parentFunction.id.type+"
+			  //,"+path.node.loc.start.line);
+			  console.log("insert into jsfiles (file_path,parent_function,member_name,callee_name,arguments_length,line_num,arguments_value) values('"
+			  +fileName+"','"+parentFunction.node.id.name+"','"+memberName+"','"+calleeName+"',"+functionArguments.length+","+node.loc.start.line+",'"
+			  +argumentsString.substr(3)+"');");
+			 else
+				console.log("insert into jsfiles(file_path,parent_function,member_name,callee_name,arguments_length,line_num,arguments_value) values('"
+			 +fileName+"','"+"','"+memberName+"','"+calleeName+"',"+functionArguments.length+","+path.node.loc.start.line+",'"+argumentsString.substr(3)+"');");
+			 },
+			 
+			 FunctionDeclaration(path,state){
 				var fileName = (process.argv[2]).replaceAll("\\","\\\\");
-				const {node , scope} = path;
-				
-				const functionName = path.node.id.name;
-				const params = path.node.params;
-				
-				const parentFunctionPath = path.findParent((path) => path.isFunctionDeclaration());
 				var parentFunction;
 				
-				//const parentFunction = path.getFunctionParent();
-				if(parentFunctionPath)
-					//console.log("parent function name : "+parentFunction.node.id.name);
+				const functionParams = path.node.params;
+				
+				const {node, scope} = path;
+				const parentFunctionPath = path.findParent((path) => path.isFunctionDeclaration());
+				
+				if (parentFunctionPath)
 					parentFunction = parentFunctionPath.node.id.name;
 				else
 					parentFunction = "";
-				console.log(fileName+","+functionName+","+parentFunction+","+params.length+","+path.node.loc.start.line);
-			}*/
+					
+				console.log("insert into jsfunctions (file_path,function_name,parent_function,params_length,line_num) values('"+fileName+"','"+node.id.name
+				+"','"+parentFunction+"',"+functionParams.length+","+node.loc.start.line+");");
+			}
 		}
 	}
 }
 
-function hashcode(obj) {
-    var hc = 0;
-    var chars = JSON.stringify(obj).replace(/\{|\"|\}|\:|,/g, '');
-    var len = chars.length;
-    for (var i = 0; i < len; i++) {
-        // Bump 7 to larger prime number to increase uniqueness
-        hc += (chars.charCodeAt(i) * 7);
-    }
-    return hc;
-}
-
 function getName(node) {
-  let name = ''
-
-  switch (node.type) {
-    case 'Identifier':
-      name = node.name
-      break
-    case 'MemberExpression':
-      name = `${getName(node.object)}.${getName(node.property)}`
-      break
-  }
-
-  return name
+	let name = '';
+	
+	switch(node.type){
+		case 'Identifier':
+			name = node.name;
+			break;
+		case 'MemberExpression':
+			name = `${getName(node.object)}.${getName(node.property)}`;
+			break;
+	}
+	
+	return name;
 }
 
 module.exports = traverseTest;
-
-				

@@ -107,6 +107,26 @@ const traverseTest = (babel) => {
 				
 				const functionParams = path.node.params;
 				
+				//console.log("argument numbers: "+functionArguments.length)
+				var parametersString = "";
+				for (var i=0;i<functionParams.length;i++){
+					if(t.isIdentifier(functionParams[i])){
+						//console.log("arguments "+i+" : "+functionArguments[i].name);
+						parametersString = parametersString.concat("!-!").concat(functionParams[i].name);
+					} else if (t.isStringLiteral(functionParams[i])||t.isBooleanLiteral(functionParams[i])||t.isNumericLiteral(functionParams[i])){
+						//console.log("arguments "+i+" : "+functionArguments[i].value);
+						parametersString = parametersString.concat("!-!").concat(functionParams[i].type);
+					} else {
+						//console.log("arguments "+i+" : "+functionArguments[i].type);
+						parametersString = parametersString.concat("!-!").concat(functionParams[i].type);
+					}
+				}
+				//console.log("@@@@@@@@@@@@@@@@@@@ full arguments : "+argumentsString.substr(1));
+				//return;
+				parametersString = parametersString.replace(/\n/g,"줄바꿈"); // 스트림에 \n 를 줄바꿈으로 치환한다.
+				parametersString = parametersString.replace(/\\/g,"\\\\"); // 스트림에 \ 를 \\ 로 치환한다. db에 insert 할때 \ 가 들어간다.
+				parametersString = parametersString.replace(/'/g,"\\'"); // 스트림에 ' 를 \' 로 치환한다. db에 insert 할때 ' 가 들어간다.
+				
 				const {node, scope} = path;
 				const parentFunctionPath = path.findParent((path) => path.isFunctionDeclaration());
 				
@@ -115,8 +135,8 @@ const traverseTest = (babel) => {
 				else
 					parentFunction = "";
 					
-				console.log("insert into jsfunctions (file_path,function_name,parent_function,params_length,line_num) values('"+fileName+"','"+node.id.name
-				+"','"+parentFunction+"',"+functionParams.length+","+node.loc.start.line+");");
+				console.log("insert into jsfunctions (file_path,function_name,parent_function,params_length,line_num,parameters) values('"+fileName+"','"+node.id.name
+				+"','"+parentFunction+"',"+functionParams.length+","+node.loc.start.line+",'"+parametersString.substr(3)+"');");
 			}
 		}
 	}

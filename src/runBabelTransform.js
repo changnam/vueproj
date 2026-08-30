@@ -187,6 +187,8 @@ if (process.argv.length === 3) {
 						
 			if(t.isCallExpression(path.node)){
 				//console.log("=============== isCallExpression ");
+				const callee = path.node.callee;
+
 				if(path.node.callee.property && path.node.callee.property.hasOwnProperty('name') && path.node.callee.property.name === 'loadpopup'){
 					const parentFunctionPath = path.findParent((path) => path.isVariableDeclaration());
 					if(!parentFunctionPath) {
@@ -202,6 +204,41 @@ if (process.argv.length === 3) {
 							path.skip();
 					}
 				}
+				
+				// RXCom.RemoveRows(...)
+				if (
+					t.isMemberExpression(callee) &&
+					t.isIdentifier(callee.object, { name: "RXCom" }) &&
+					t.isIdentifier(callee.property, { name: "RemoveRows" })
+				) {
+					const logCode = `
+						SYSLog.log(
+							1,
+							"blabla " + screen.getscreenid()
+						);
+					`;
+
+					const logStatements =
+						babel.parse(logCode).program.body;
+
+					/*
+					 * path = CallExpression
+					 *
+					 * We need the parent ExpressionStatement:
+					 *
+					 * ExpressionStatement
+					 * └── CallExpression  <-- current path
+					 *
+					 * Then insert before:
+					 *
+					 * SYSLog.log(...)
+					 * RXCom.RemoveRows(...)
+					 */
+					if (path.parentPath.isExpressionStatement()) {
+						path.parentPath.insertBefore(logStatements);
+					}
+				}
+	
 			}
 			
 			if(t.isReturnStatement(path.node)){
@@ -229,7 +266,7 @@ if (process.argv.length === 3) {
 					SYSLog.log(1, "${filepath} - ${functionNameOfReturn} - ended. ${path.node.loc.start.line} return ");
 				`
 				
-				const timeEndStatement = babel.parse(codeEnd).program;
+				const timeEndStatement = babel.parse(codeEnd).program.body;
 				if(functionNameOfReturn != "anonymous"){
 					path.insertBefore(timeEndStatement);
 				}

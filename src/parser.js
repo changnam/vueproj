@@ -25,6 +25,8 @@ if (process.argv.length === 3){
 		presets: [presetReact],
 		parserOpts: {
 				plugins: [],
+				sourceType: "script",
+				strictMode: false
 		},
 		filename,
 	});

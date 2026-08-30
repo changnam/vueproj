@@ -10,6 +10,32 @@ const callee_name = require('./callee_name');
 
 var t = babel.types;
 
+let programProcessed = false;
+let functionProcessed = false;
+
+const stmtShowDatasetLog = `
+function showDatasetLog(dsObj){
+	SYSLog.log(1,"Dataset name: " + dsObj.getid() + ", columns count: "+dsObj.getcoumncount() + ", rows count: " + dsObj.getrowcount());
+	for (var runDatasetIndexI=0;runDatasetIndexI<dsObj.getrowcount();runDatasetIndexI++){
+		for(var runDatasetIndexJ=0;runDatasetIndexJ<dsObj.getcolumncount();runDatasetIndexJ++){
+			SYSLog.log(1,"row " + runDatasetIndexI + ","+ dsObj.getcolumnid(runDatasetIndexJ) + ": " + dsObj.getdata(runDatasetIndexI, runDatasetIndexJ));
+		}
+	}
+}
+`
+
+const stmtShowGridLog = `
+function showGridLog(grd){
+	SYSLog.log(1,"Grid name: "+grd.getname() + ",column count: "+grd.getcolumncount()+", rows count: "+grd.getrowcount());
+	for(var runGridIndexI = 0;runGridIndexI < grd.getrowcount();runGridIndexI++){
+		for (var runGridIndexJ = 0;runGridIndexJ < grd.getcolumncount();runGridIndexJ++){
+			SYSLog.log(1,"row "+runGridIndexI + ",column: "+ runGridIndexJ + "," + grd.getcolumnname(runGridIndexJ) + ": "+grd.getitemtext(runGridIndexI, runGridIndexJ));
+		}
+	}
+}
+`
+
+	
 if (process.argv.length === 3) {
 	const filename = process.argv[2];
 	//
@@ -30,10 +56,30 @@ if (process.argv.length === 3) {
 	const output = babel.traverse(ast,{
 		enter(path) {
 			if (t.isProgram(path.node)){
+				if (programProcessed) {
+					return;
+				}
+				
+				programProcessed = true;
+				 
 				console.log("@@@@@@@@@@@@@@@@@@@@ Entering Program, start:" +path.node.loc.start.line+",end: "+path.node.loc.end.line);
+				const getDatasetLogAst =  babel.parse(stmtShowDatasetLog);
+				// parse 결과의 Program.body 배열을 삽입
+				path.unshiftContainer('body',getDatasetLogAst.program.body);
+				//path.skip();
+				//return;
 			}
 			
 			if(t.isFunctionDeclaration(path.node)) {
+				const functionName = path.node.id?.name;
+				if (functionName === 'showDatasetLog' || functionName === 'showGridLog') {
+					if (functionProcessed){
+						path.skip();
+						return;
+					}
+					functionProcessed = true;
+				}
+								
 				const code = `
 					for (var runIndexI=0; runIndexI<arguments.length; runIndexI++) {
 						if(typeof arguments[runIndexI] === 'string') {
@@ -115,6 +161,7 @@ if (process.argv.length === 3) {
 						)
 					);
 				*/
+				
 			}
 			
 									/*
@@ -181,7 +228,6 @@ if (process.argv.length === 3) {
 		},
 		exit(path){
 			if(t.isFunctionDeclaration(path.node)) {
-				
 				const filepath = filename.replace(/\\/g,"\\\\");
 				const objscreen = "objscreen.getscreenid()";
 				const xDataSet = "xDataSet.getid()";
@@ -241,6 +287,7 @@ if (process.argv.length === 3) {
 			  } else {
 				//lastExpression.insertBefore(timeEndStatement);
 			  }
+
 			}
         }		
 		

@@ -11,7 +11,8 @@ const callee_name = require('./callee_name');
 var t = babel.types;
 
 let programProcessed = false;
-let functionProcessed = false;
+let datasetProcessed = false;
+let gridProcessed = false;
 
 const stmtShowDatasetLog = `
 function showDatasetLog(dsObj){
@@ -64,20 +65,28 @@ if (process.argv.length === 3) {
 				 
 				console.log("@@@@@@@@@@@@@@@@@@@@ Entering Program, start:" +path.node.loc.start.line+",end: "+path.node.loc.end.line);
 				const getDatasetLogAst =  babel.parse(stmtShowDatasetLog);
+				const getGridLogAst = babel.parse(stmtShowGridLog);
+				const functions = [...getDatasetLogAst.program.body,...getGridLogAst.program.body];
 				// parse 결과의 Program.body 배열을 삽입
-				path.unshiftContainer('body',getDatasetLogAst.program.body);
+				path.unshiftContainer('body',functions);
 				//path.skip();
 				//return;
 			}
-			
+
 			if(t.isFunctionDeclaration(path.node)) {
 				const functionName = path.node.id?.name;
-				if (functionName === 'showDatasetLog' || functionName === 'showGridLog') {
-					if (functionProcessed){
+				if (functionName === 'showDatasetLog') {
+					if (datasetProcessed){
+						path.skip(); //한번만 처리를 위해 그 다움에는 skip 한다.
+						return;
+					}
+					datasetProcessed = true;
+				} else if (functionName === 'showGridLog'){
+					if (gridProcessed) {
 						path.skip();
 						return;
 					}
-					functionProcessed = true;
+					gridProcessed = true;
 				}
 								
 				const code = `

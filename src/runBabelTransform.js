@@ -35,13 +35,13 @@ if (process.argv.length === 3) {
 			
 			if(t.isFunctionDeclaration(path.node)) {
 				const code = `
-					for (var i=0; i<arguments.length; i++) {
-						if(typeof arguments[i] === 'string') {
-							SYSLog.log(1,i + " ===> "+arguments[i]);
-						} else if(typeof arguments[i] === 'boolean') {
-							SYSLog.log(1,i + " ===> "+arguments[i].toString());
-						} else if(typeof arguments[i] === 'number') {
-							SYSLog.log(1,i + " ===> "+arguments[i].toString());
+					for (var runIndexI=0; runIndexI<arguments.length; runIndexI++) {
+						if(typeof arguments[runIndexI] === 'string') {
+							SYSLog.log(1,runIndexI + " ===> "+arguments[runIndexI]);
+						} else if(typeof arguments[runIndexI] === 'boolean') {
+							SYSLog.log(1,runIndexI + " ===> "+arguments[runIndexI].toString());
+						} else if(typeof arguments[runIndexI] === 'number') {
+							SYSLog.log(1,runIndexI + " ===> "+arguments[runIndexI].toString());
 						}
 					}
 				`;
@@ -239,7 +239,7 @@ if (process.argv.length === 3) {
 			  if (lastExpression.type !== 'ReturnStatement') {
 				lastExpression.insertAfter(timeEndStatement);
 			  } else {
-				lastExpression.insertBefore(timeEndStatement);
+				//lastExpression.insertBefore(timeEndStatement);
 			  }
 			}
         }		

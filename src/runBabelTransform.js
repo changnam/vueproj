@@ -148,6 +148,36 @@ if (process.argv.length === 3) {
 				}
 			}
 			
+			if(t.isReturnStatement(path.node)){
+				console.log("##Entering return statement: "+path.node.loc.start.line + ", end: "+path.node.loc.end.line);
+				const filepath = filename.replace(/\\/g,"\\\\");
+				let functionNameOfReturn = "anonymous";
+				let codeEnd = "";
+				const parentFunctionPath = path.getFunctionParent();
+				if(parentFunctionPath){
+					if(parentFunctionPath.isFunctionDeclaration()){
+						functionNameOfReturn = parentFunctionPath.node.id?.name || "anonymous";
+					}else if(parentFunctionPath.isFunctionExpression() || parentFunctionPath.isArrowFunctionExpression()){
+						const parent = parentFunctionPath.parentPath;
+						if(parent.isVariableDeclarator()){
+							functionNameOfReturn = parent.node.id.name;
+						} else if (parent.isObjectProperty() || parent.isObjectMethod()) {
+							functionNameOfReturn = parent.node.key.name;
+						} else if (parent.isClassMethod()) {
+							functionNameOfReturn = parent.node.key.name;
+						}
+					}
+				}
+				
+				codeEnd = `
+					SYSLog.log(1, "${filepath} - ${functionNameOfReturn} - ended. ${path.node.loc.start.line} return ");
+				`
+				
+				const timeEndStatement = babel.parse(codeEnd).program;
+				if(functionNameOfReturn != "anonymous"){
+					path.insertBefore(timeEndStatement);
+				}
+			}
 		},
 		exit(path){
 			if(t.isFunctionDeclaration(path.node)) {

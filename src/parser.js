@@ -2,6 +2,7 @@ const fs = require('fs');
 const babel = require('@babel/core');
 const syntaxJsx = require('@babel/plugin-syntax-jsx')
 const presetReact = require('@babel/preset-react');
+const iconv = require('iconv-lite');
 
 var src = `var a = 1; // pathA, path.key = 0
 var b = 2; // pathB, path.key = 1
@@ -12,8 +13,10 @@ if (process.argv.length === 3){
 	const filename = process.argv[2];
 	console.log(filename);
 	
-	const source = fs.readFileSync(filename).toString();
+	//const source = fs.readFileSync(filename).toString();
 	//console.log(source);
+	const content = fs.readFileSync(filename);
+	const source = iconv.decode(content, "euc-kr");
 	
 	const ast = babel.parseSync(source, {
 		babelrc: false,

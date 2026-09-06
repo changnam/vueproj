@@ -11,7 +11,7 @@ let cnt = 0;
 
 if (process.argv.length === 3) {
 
-    const filename = process.argv[2];
+    let filename = process.argv[2];
 
     console.log(
         "@@@@@@@@@@@@@@@@@@@@@@ processing... " + filename
@@ -29,6 +29,8 @@ if (process.argv.length === 3) {
 			
 	const functionBlocks = new Map();
 	
+	filename = filename.replaceAll("\\","\\\\");
+	
     // --------------------------------------------------------
     // Traverse
     // --------------------------------------------------------
@@ -42,7 +44,7 @@ if (process.argv.length === 3) {
             if (!node) {
                 return;
             }
-
+			
 			// ==================================================
             // Program
             // ==================================================
@@ -52,15 +54,19 @@ if (process.argv.length === 3) {
                 const functionName = "<global>";
 
                 const blockInfo = {
+					filename: filename,
+					parseOrder: cnt,
                     type: "Program",
                     line: node.loc ? node.loc.start.line : 0,
                     column: node.loc ? node.loc.start.column : 0,
                     expressionCount: 0,
-                    variableDeclarationCount: 0
+                    variableDeclarationCount: 0,
+					firstIdentifier: null
                 };
 
-
-                for (const stmtPath of path.get("body")) {
+				const bodyPaths = path.get("body");
+				
+                for (const stmtPath of bodyPaths) {
 
                     if (stmtPath.isExpressionStatement()) {
                         blockInfo.expressionCount++;
@@ -69,9 +75,36 @@ if (process.argv.length === 3) {
                     if (stmtPath.isVariableDeclaration()) {
                         blockInfo.variableDeclarationCount++;
                     }
+					
+					if (stmtPath.isLiteral()) {
+                        blockInfo.literalDeclarationCount++;
+                    }
+					// Find the first Identifier in this statement
+					if (blockInfo.firstIdentifier === null) {
+
+						stmtPath.traverse({
+							Identifier(identifierPath) {
+
+								blockInfo.firstIdentifier =
+									identifierPath.node.name;
+
+								identifierPath.stop();
+							}
+						});
+					}
                 }
 
+				if (bodyPaths.length > 0) {
 
+					const firstStatement =
+						bodyPaths[0].node;
+
+					if (firstStatement.loc) {
+						blockInfo.line =
+							firstStatement.loc.start.line;
+					}
+				}
+				
                 addBlock(
                     functionBlocks,
                     functionName,
@@ -84,10 +117,10 @@ if (process.argv.length === 3) {
             // ==================================================
 
             if (t.isBlockStatement(node)) {
-
+				cnt++;
                 let expressionCount = 0;
                 let variableDeclarationCount = 0;
-
+				let firstIdentifier = null;
 
                 // ----------------------------------------------
                 // Count direct statements in this block
@@ -102,6 +135,20 @@ if (process.argv.length === 3) {
                     if (stmtPath.isVariableDeclaration()) {
                         variableDeclarationCount++;
                     }
+					
+					 // Find the first Identifier in this statement
+					if (firstIdentifier === null) {
+
+						stmtPath.traverse({
+							Identifier(identifierPath) {
+
+								firstIdentifier =
+									identifierPath.node.name;
+
+								identifierPath.stop();
+							}
+						});
+					}
                 }
 
 
@@ -128,7 +175,10 @@ if (process.argv.length === 3) {
                 // ----------------------------------------------
 
                 const blockInfo = {
-
+					filename: filename,
+					
+					parseOrder: cnt,
+					
                     type: "BlockStatement",
 
                     line: node.loc
@@ -143,7 +193,10 @@ if (process.argv.length === 3) {
                         expressionCount,
 
                     variableDeclarationCount:
-                        variableDeclarationCount
+                        variableDeclarationCount,
+						
+					firstIdentifier:
+						firstIdentifier
                 };
 
 
@@ -225,13 +278,18 @@ if (process.argv.length === 3) {
 
 
         for (const block of blocks) {
-
-            console.log(
+			 let firstIdentifier = block.firstIdentifier ? block.firstIdentifier : "<none>";
+			 console.log("insert into jsblocks (file_path,parent_function,block_order,block_line,expression_cnt,variable_cnt,first_identifier,parse_order) values('"
+			  +block.filename+"','"+functionName+"',"+blockNo++ +","+block.line+","+block.expressionCount+","+block.variableDeclarationCount+",'"+firstIdentifier+"',"+block.parseOrder+");");
+			  
+            /* console.log(
+			    `filename ${filename} -> ` +
                 `Block ${blockNo++} ` +
                 `line ${block.line} -> ` +
+				`firstIdentifier: ${block.firstIdentifier || "<none>"} -> ` +
                 `${block.expressionCount} ExpressionStatement, ` +
                 `${block.variableDeclarationCount} VariableDeclaration`
-            );
+            ); */
         }
     }
 }

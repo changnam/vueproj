@@ -52,7 +52,8 @@ if (process.argv.length === 3) {
             if (t.isProgram(node)) {
 				cnt++;
                 const functionName = "<global>";
-
+				const blockHash = getBlockHash(node);
+				
                 const blockInfo = {
 					filename: filename,
 					parseOrder: cnt,
@@ -61,7 +62,8 @@ if (process.argv.length === 3) {
                     column: node.loc ? node.loc.start.column : 0,
                     expressionCount: 0,
                     variableDeclarationCount: 0,
-					firstIdentifier: null
+					firstIdentifier: null,
+					blockHash: blockHash
                 };
 
 				const bodyPaths = path.get("body");
@@ -128,7 +130,17 @@ if (process.argv.length === 3) {
                 let expressionCount = 0;
                 let variableDeclarationCount = 0;
 				let firstIdentifier = null;
+				
+				// --------------------------------------------------------
+				// Hash based on block body
+				// --------------------------------------------------------
 
+				const blockHash = getBlockHash(node);
+
+				//console.log(
+				//	"Block hash: " + blockHash
+				//);
+	
                 // ----------------------------------------------
                 // Count direct statements in this block
                 // ----------------------------------------------
@@ -215,7 +227,9 @@ if (process.argv.length === 3) {
                         variableDeclarationCount,
 						
 					firstIdentifier:
-						firstIdentifier
+						firstIdentifier,
+						
+					blockHash: blockHash
                 };
 
 
@@ -298,8 +312,8 @@ if (process.argv.length === 3) {
 
         for (const block of blocks) {
 			 let firstIdentifier = block.firstIdentifier ? block.firstIdentifier : "<none>";
-			 console.log("insert into jsblocks (file_path,parent_function,block_order,block_line,expression_cnt,variable_cnt,first_identifier,parse_order) values('"
-			  +block.filename+"','"+functionName+"',"+blockNo++ +","+block.line+","+block.expressionCount+","+block.variableDeclarationCount+",'"+firstIdentifier+"',"+block.parseOrder+");");
+			 console.log("insert into jsblocks (file_path,parent_function,block_order,block_hash,block_line,expression_cnt,variable_cnt,first_identifier,parse_order) values('"
+			  +block.filename+"','"+functionName+"',"+blockNo++ +",'"+block.blockHash+"',"+block.line+","+block.expressionCount+","+block.variableDeclarationCount+",'"+firstIdentifier+"',"+block.parseOrder+");");
 			  
             /* console.log(
 			    `filename ${filename} -> ` +
@@ -427,4 +441,68 @@ function getFunctionName(functionPath) {
 
 
     return "<anonymous>";
+}
+
+function getBlockHash(blockNode) {
+
+    if (!blockNode || !t.isBlockStatement(blockNode)) {
+        return null;
+    }
+
+    // Only hash the body.
+    const body = blockNode.body;
+
+    // Remove location information so that the same code
+    // at different line numbers produces the same hash.
+    const normalizedBody = removeLocation(body);
+
+    const bodyString = JSON.stringify(normalizedBody);
+
+    return hashcode(bodyString);
+}
+
+function removeLocation(value) {
+
+    if (Array.isArray(value)) {
+        return value.map(removeLocation);
+    }
+
+    if (value && typeof value === "object") {
+
+        const result = {};
+
+        for (const [key, val] of Object.entries(value)) {
+
+            // Ignore Babel location information
+            if (
+                key === "loc" ||
+                key === "start" ||
+                key === "end" ||
+                key === "extra"
+            ) {
+                continue;
+            }
+
+            result[key] = removeLocation(val);
+        }
+
+        return result;
+    }
+
+    return value;
+}
+
+function hashcode(value) {
+
+    if (typeof value !== "string") {
+        value = JSON.stringify(value);
+    }
+
+    let hc = 0;
+
+    for (let i = 0; i < value.length; i++) {
+        hc += value.charCodeAt(i) * 7;
+    }
+
+    return hc;
 }

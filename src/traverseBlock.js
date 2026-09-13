@@ -68,12 +68,19 @@ if (process.argv.length === 3) {
 				
                 for (const stmtPath of bodyPaths) {
 
-                    if (stmtPath.isExpressionStatement()) {
+                    if (stmtPath.isExpressionStatement()) {							
                         blockInfo.expressionCount++;
                     }
 
                     if (stmtPath.isVariableDeclaration()) {
-                        blockInfo.variableDeclarationCount++;
+						//var nhandle; 변수선언인 경우 count 제외
+						const declarations = stmtPath.node.declarations;
+						
+						for (const declarator of declarations) {
+							const name = declarator.id.name;
+							if (name === "nhandel") continue;
+							else blockInfo.variableDeclarationCount++;
+						}
                     }
 					
 					if (stmtPath.isLiteral()) {
@@ -129,26 +136,38 @@ if (process.argv.length === 3) {
                 for (const stmtPath of path.get("body")) {
 
                     if (stmtPath.isExpressionStatement()) {
-                        expressionCount++;
+						const expr = stmtPath.node.expression;
+						
+						// nhandel = GFN.initScrSetting(screen); statement 이면 counting 및 identifier 찾기 제외
+						if(expr.type === "AssignmentExpression" &&
+						   expr.right.type === "CallExpression" &&
+						   expr.right.callee.type === "MemberExpression" &&
+						   expr.right.callee.object.name === "GFN" &&
+						   expr.right.callee.property.name === "initScrSetting")
+						{
+							continue;
+						} else {
+							expressionCount++;
+							
+							// Find the first Identifier in this statement
+							if (firstIdentifier === null) {
+
+								stmtPath.traverse({
+									Identifier(identifierPath) {
+
+										firstIdentifier =
+											identifierPath.node.name;
+
+										identifierPath.stop();
+									}
+								});
+							}
+						}
                     }
 
                     if (stmtPath.isVariableDeclaration()) {
                         variableDeclarationCount++;
                     }
-					
-					 // Find the first Identifier in this statement
-					if (firstIdentifier === null) {
-
-						stmtPath.traverse({
-							Identifier(identifierPath) {
-
-								firstIdentifier =
-									identifierPath.node.name;
-
-								identifierPath.stop();
-							}
-						});
-					}
                 }
 
 

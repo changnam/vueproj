@@ -14,6 +14,41 @@ let programProcessed = false;
 let datasetProcessed = false;
 let gridProcessed = false;
 
+const ignoreConfig = {
+    "C:\\xFrame\\project\\asb\\screen\\common_module\\PrimoTran.js": [
+        "ProcessScreenSend_normal"
+    ],
+
+    "C:\\xFrame\\project\\SJRX\\screen\\SYSTEM\\AC\\A4900010.js": [
+        "gfn_ds2div",
+        "gfn_div2ds"
+    ],
+
+    "C:\\xFrame\\project\\SJRX\\screen\\SYSTEM\\AC\\A4900020.js": [
+        "set_value",
+        "set_enable",
+        "xdatasetSetUndefined"
+    ]
+};
+
+function getIgnoredFunctions(filePath) {
+    const normalizedPath = filePath.replace(/\//g, "\\").toLowerCase();
+
+    for (const [configFile, functions] of Object.entries(ignoreConfig)) {
+        if (normalizedPath === configFile.toLowerCase()) {
+            return functions;
+        }
+    }
+
+    return [];
+}
+
+function isIgnoredFunction(filePath, functionName) {
+    const ignoredFunctions = getIgnoredFunctions(filePath);
+
+    return ignoredFunctions.includes(functionName);
+}
+
 const stmtShowDatasetLog = `
 function showDatasetLog(dsObj){
 	SYSLog.log(1,"Dataset name: " + dsObj.getid() + ", columns count: "+dsObj.getcoumncount() + ", rows count: " + dsObj.getrowcount());
@@ -75,6 +110,19 @@ if (process.argv.length === 3) {
 
 			if(t.isFunctionDeclaration(path.node)) {
 				const functionName = path.node.id?.name;
+				
+				if (isIgnoredFunction(filename, functionName)) {
+					console.log(
+						"### Ignoring function: " +
+						functionName +
+						" in file: " +
+						filename
+					);
+
+					path.skip();
+					return;
+				}
+	
 				if (functionName === 'showDatasetLog') {
 					if (datasetProcessed){
 						path.skip(); //한번만 처리를 위해 그 다움에는 skip 한다.
@@ -142,7 +190,7 @@ if (process.argv.length === 3) {
 						else
 							SYSLog.log(1,"${filepath} - ${path.node.id.name} - started. obj: "+${obj}+",xDataSet: "+${xDataSet});
 					`
-				} else if (path.node.id.name == "showDataSetLog" || filepath == "C:\\xFrame\\project\\DSI\\screen\\common_module\\nTreeUtil.js"){ 
+				} else if (path.node.id.name == "showDataSetLog" && filepath == "C:\\xFrame\\project\\DSI\\screen\\common_module\\nTreeUtil.js"){ 
 					//node replace (함수 replace) undefined 처리를 위함
 					//path.replace;
 					path.remove();
@@ -243,10 +291,23 @@ if (process.argv.length === 3) {
 			
 			if(t.isReturnStatement(path.node)){
 				console.log("##Entering return statement: "+path.node.loc.start.line + ", end: "+path.node.loc.end.line);
+	
 				const filepath = filename.replace(/\\/g,"\\\\");
 				let functionNameOfReturn = "anonymous";
 				let codeEnd = "";
 				const parentFunctionPath = path.getFunctionParent();
+				/*
+				if (parentFunctionPath &&
+					skipReturnFunctions.has(parentFunctionPath.node)) {
+
+					console.log(
+						"##Skipping return statement because parent FunctionDeclaration has addFlag=false: " +
+						path.node.loc.start.line
+					);
+
+					return;
+				}
+				*/
 				if(parentFunctionPath){
 					if(parentFunctionPath.isFunctionDeclaration()){
 						functionNameOfReturn = parentFunctionPath.node.id?.name || "anonymous";

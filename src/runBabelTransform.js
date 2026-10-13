@@ -236,7 +236,8 @@ if (process.argv.length === 3) {
 			if(t.isCallExpression(path.node)){
 				//console.log("=============== isCallExpression ");
 				const callee = path.node.callee;
-
+				const args = path.node.arguments.map(arg => t.cloneNode(arg, true));
+				
 				if(path.node.callee.property && path.node.callee.property.hasOwnProperty('name') && path.node.callee.property.name === 'loadpopup'){
 					const parentFunctionPath = path.findParent((path) => path.isVariableDeclaration());
 					if(!parentFunctionPath) {
@@ -250,6 +251,27 @@ if (process.argv.length === 3) {
 							parentFunctionPath.insertBefore(t.callExpression(t.memberExpression(t.identifier('factory'), t.identifier('consoleprint')),
 							[t.stringLiteral(filename+":  loading popup")]));
 							path.skip();
+					}
+				}
+				
+				// factory.consoleprint 면 SYSLog.log 추가
+				if (t.isMemberExpression(callee) &&
+					t.isIdentifier(callee.object, { name: "factory"}) &&
+					t.isIdentifier(callee.property, { name: "consoleprint"})
+				) {
+					const logStatements = t.callExpression(
+						t.memberExpression(
+							t.identifier("SYSLog"),
+							t.identifier("log")
+						),
+						[
+							t.numericLiteral(1),
+							...args
+						]
+					);
+					
+					if(path.parentPath.isExpressionStatement()){
+						path.parentPath.insertBefore(logStatements);
 					}
 				}
 				

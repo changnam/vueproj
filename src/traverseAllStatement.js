@@ -9,6 +9,55 @@ const t = babel.types;
 
 let cnt = 0;
 
+const ignoredCalls = new Set([
+    "console.log",
+    "SYSLog.log",
+    "GFN.initScrSetting",
+    "RXCom.RemoveRows",
+	"factory.consoleprint"
+]);
+
+function getCalleeName(callee) {
+    if (t.isIdentifier(callee)) {
+        return callee.name;
+    }
+
+    if (t.isMemberExpression(callee)) {
+        const objectName = getCalleeName(callee.object);
+
+        const propertyName = t.isIdentifier(callee.property)
+            ? callee.property.name
+            : t.isStringLiteral(callee.property)
+                ? callee.property.value
+                : null;
+
+        if (objectName && propertyName) {
+            return objectName + "." + propertyName;
+        }
+    }
+
+    return null;
+}
+
+function shouldIgnoreStatement(stmtPath) {
+    if (!stmtPath.isExpressionStatement()) {
+        return false;
+    }
+
+    const expr = stmtPath.node.expression;
+
+    if (t.isCallExpression(expr)) {
+        return ignoredCalls.has(getCalleeName(expr.callee));
+    }
+
+    if (t.isAssignmentExpression(expr) &&
+        t.isCallExpression(expr.right)) {
+        return ignoredCalls.has(getCalleeName(expr.right.callee));
+    }
+
+    return false;
+}
+
 function getStatementHash(node) {
     // Clone the AST node so the original AST is not modified.
     const cloned = t.cloneNode(node, true);
@@ -398,6 +447,12 @@ if (process.argv.length === 3) {
 
 	babel.traverse(ast, {
 		enter(path) {
+
+			if (shouldIgnoreStatement(path)) {
+				return;
+			}
+
+
 			if (t.isStatement(path.node)) {
 				const line = path.node.loc
                 ? path.node.loc.start.line

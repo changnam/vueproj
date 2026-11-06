@@ -9,6 +9,109 @@ const t = babel.types;
 
 let cnt = 0;
 
+const HASH_IGNORED_PROPERTIES = new Set([
+    // Babel metadata
+    "start",
+    "end",
+    "loc",
+    "extra",
+    "leadingComments",
+    "trailingComments",
+    "innerComments",
+    "comments",
+
+    // Properties added by assignStatementKeys()
+    "fnName",
+    "functionOrder",
+    "keyCount",
+    "statementKey",
+    "typeOrder"
+]);
+
+function normalizeCallTest(node) {
+    if (t.isExpressionStatement(node)) {
+        node = node.expression;
+    }
+
+    if (!t.isCallExpression(node)) {
+        console.log("Not a CallExpression:", node.type);
+        return;
+    }
+
+    const calleeName = getCalleeName(node.callee);
+    const maxArgs = normalizeCallFunctions.get(calleeName);
+
+    console.log("Callee:", calleeName);
+    console.log("Max arguments:", maxArgs);
+    console.log("Before:", node.arguments.length);
+
+    const normalized = {
+        type: node.type,
+        callee: normalizeAst(node.callee),
+        arguments: node.arguments
+            .slice(0, maxArgs ?? node.arguments.length)
+            .map(arg => normalizeAst(arg))
+    };
+
+    console.log("After:", normalized.arguments.length);
+    console.log(JSON.stringify(normalized, null, 2));
+}
+
+function normalizeAst(node) {
+    if (node === null || node === undefined) {
+        return null;
+    }
+
+    if (Array.isArray(node)) {
+        return node.map(normalizeAst);
+    }
+
+    if (typeof node !== "object") {
+        return node;
+    }
+
+    // Handle function calls explicitly
+    if (
+        t.isCallExpression(node) ||
+        t.isOptionalCallExpression(node)
+    ) {
+        const calleeName = getCalleeName(node.callee);
+
+        let args = node.arguments;
+
+        if (normalizeCallFunctions.has(calleeName)) {
+            const maxArgs = normalizeCallFunctions.get(calleeName);
+
+            args = args.slice(0, maxArgs);
+        }
+
+        return {
+            type: node.type,
+            callee: normalizeAst(node.callee),
+            arguments: args.map(normalizeAst)
+        };
+    }
+
+    const result = {};
+
+    for (const key of Object.keys(node).sort()) {
+        if (HASH_IGNORED_PROPERTIES.has(key)) {
+            continue;
+        }
+
+        result[key] = normalizeAst(node[key]);
+    }
+
+    return result;
+}
+
+
+const normalizeCallFunctions = new Map([
+    ["screen.applytranmap", 3],
+    ["GFN.SomeFunction", 2],
+    ["factory.consoleprint", 1]
+]);
+
 const ignoredCalls = new Set([
 	"setcolumnwidth",
     "console.log",
@@ -25,7 +128,10 @@ function getCalleeName(callee) {
         return callee.name;
     }
 
-    if (t.isMemberExpression(callee)) {
+    if (
+        t.isMemberExpression(callee) ||
+        t.isOptionalMemberExpression(callee)
+    ) {
         const objectName = getCalleeName(callee.object);
 
         const propertyName = t.isIdentifier(callee.property)
@@ -43,40 +149,25 @@ function getCalleeName(callee) {
 }
 
 function getStatementHash(node) {
-    // Clone the AST node so the original AST is not modified.
-    const cloned = t.cloneNode(node, true);
+    const normalized = normalizeAst(node);
+    const json = JSON.stringify(normalized);
 
-    // Remove location and metadata that should not affect the hash.
-    function clean(n) {
-        if (!n || typeof n !== "object") return;
+    console.log("NORMALIZED AST:");
+    console.log(json);
 
-        delete n.start;
-        delete n.end;
-        delete n.loc;
-        delete n.leadingComments;
-        delete n.trailingComments;
-        delete n.innerComments;
-        delete n.extra;
+    console.log("HASH:");
 
-        for (const value of Object.values(n)) {
-            if (Array.isArray(value)) {
-                value.forEach(clean);
-            } else if (value && typeof value === "object") {
-                clean(value);
-            }
-        }
-    }
-
-    clean(cloned);
-
-    const normalized = JSON.stringify(cloned);
-
-    return crypto
+    const hash = crypto
         .createHash("sha256")
-        .update(normalized)
+        .update(json)
         .digest("hex")
         .substring(0, 16);
+
+    console.log(hash);
+
+    return hash;
 }
+
 
 function getFunctionName(path) {
     const fn = path.getFunctionParent();
@@ -330,50 +421,6 @@ function debugForHeader(node) {
     console.log("BODY TYPE:", node.body.type);
 }
 
-function normalizeAst(node) {
-    if (node === null || node === undefined) {
-        return null;
-    }
-
-    if (Array.isArray(node)) {
-        return node.map(normalizeAst);
-    }
-
-    if (typeof node !== "object") {
-        return node;
-    }
-
-    const ignoredProperties = new Set([
-        // Babel metadata
-        "start",
-        "end",
-        "loc",
-        "extra",
-        "leadingComments",
-        "trailingComments",
-        "innerComments",
-        "comments",
-
-        // Properties added by your program
-        "fnName",
-        "functionOrder",
-        "keyCount",
-        "statementKey",
-        "typeOrder"
-    ]);
-
-    const result = {};
-
-    for (const key of Object.keys(node).sort()) {
-        if (ignoredProperties.has(key)) {
-            continue;
-        }
-
-        result[key] = normalizeAst(node[key]);
-    }
-
-    return result;
-}
 function getForHeaderHash(node) {
     if (!t.isForStatement(node)) {
         return null;
@@ -393,45 +440,12 @@ function getForHeaderHash(node) {
 }
 
 function getForInHeaderHash(node) {
-    if (!t.isForInStatement(node)) {
+    if (!t.isForInStatement(node) &&
+        !t.isForOfStatement(node)) {
         return null;
     }
 
-    function normalize(n) {
-        if (n == null) {
-            return null;
-        }
-
-        if (Array.isArray(n)) {
-            return n.map(normalize);
-        }
-
-        if (typeof n !== "object") {
-            return n;
-        }
-
-        const result = {};
-
-        for (const key of Object.keys(n).sort()) {
-            if ([
-                "start",
-                "end",
-                "loc",
-                "leadingComments",
-                "trailingComments",
-                "innerComments",
-                "extra"
-            ].includes(key)) {
-                continue;
-            }
-
-            result[key] = normalize(n[key]);
-        }
-
-        return result;
-    }
-
-    const header = normalize({
+    const header = normalizeAst({
         left: node.left,
         right: node.right
     });
@@ -442,6 +456,7 @@ function getForInHeaderHash(node) {
         .digest("hex")
         .substring(0, 16);
 }
+
 
 function sqlValue(value) {
     if (value == null || value === "null") {
@@ -507,6 +522,28 @@ function getFunctionNameOnly(callee) {
     }
 
     return null;
+}
+
+function normalizeCallExpression(node) {
+    if (!t.isCallExpression(node)) {
+        return normalizeAst(node);
+    }
+
+    const calleeName = getCalleeName(node.callee);
+
+    // Normalize only selected functions
+    if (normalizeCallFunctions.has(calleeName)) {
+
+        return {
+            type: "CallExpression",
+            callee: normalizeAst(node.callee),
+            arguments: node.arguments
+                .slice(0, 3)
+                .map(arg => normalizeAst(arg))
+        };
+    }
+
+    return normalizeAst(node);
 }
 
 // ------------------------------------------------------------

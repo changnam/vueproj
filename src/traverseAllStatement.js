@@ -1,4 +1,4 @@
-//CREATE TABLE jsstatements (file_path varchar2(1024),parent_function varchar2(256),statement_type varchar2(256), function_order NUMBER, type_order NUMBER, statement_key varchar2(2048), key_order NUMBER,child_statements NUMBER, statement_hash varchar2(512),condition_hash varchar2(512), forheader_hash varchar2(512),line_num number);
+//CREATE TABLE jsstatements (file_path varchar2(1024),parent_function varchar2(256),statement_type varchar2(256), function_order NUMBER, type_order NUMBER, statement_key clob, key_order NUMBER,child_statements NUMBER, statement_hash varchar2(512),condition_hash varchar2(512), forheader_hash varchar2(512),key_hash varchar2(512),line_num number);
 //INSERT INTO jsstatements values('D:\\DBS\\project\\DSI\\screen\\common_module\\CCNFile.js','NtFileExists','ReturnStatement',2,1,'NtFileExists/ReturnStatement/CCNConst.CORE_FTP_MBS.NtFileExists.strFilePath',1,0,'0ace33398d6c2f69','0ace33398d6c2f69','0ace33398d6c2f69',1528);
 
 const fs = require('fs');
@@ -13,6 +13,7 @@ const ignoredCalls = new Set([
     "console.log",
     "SYSLog.log",
     "GFN.initScrSetting",
+	"GFN.SetGridResize",
     "RXCom.RemoveRows",
 	"factory.consoleprint"
 ]);
@@ -37,25 +38,6 @@ function getCalleeName(callee) {
     }
 
     return null;
-}
-
-function shouldIgnoreStatement(stmtPath) {
-    if (!stmtPath.isExpressionStatement()) {
-        return false;
-    }
-
-    const expr = stmtPath.node.expression;
-
-    if (t.isCallExpression(expr)) {
-        return ignoredCalls.has(getCalleeName(expr.callee));
-    }
-
-    if (t.isAssignmentExpression(expr) &&
-        t.isCallExpression(expr.right)) {
-        return ignoredCalls.has(getCalleeName(expr.right.callee));
-    }
-
-    return false;
 }
 
 function getStatementHash(node) {
@@ -171,6 +153,11 @@ function assignStatementKeys(ast) {
 
             if (!t.isStatement(node)) return;
 
+			// IMPORTANT: Ignore before incrementing any counters
+            if (shouldIgnoreStatement(path)) {
+                return;
+            }
+			
             const fnPath = path.getFunctionParent();
             const functionId = fnPath ? fnPath.node : ast;
 
@@ -254,22 +241,30 @@ function getDirectChildStatementCount(path) {
         }
 
         count += block.body.filter(
-            stmt => t.isStatement(stmt)
+            stmt => t.isStatement(stmt) && !shouldIgnoreStatementNode(stmt)
         ).length;
+
     }
 
-    if (t.isBlockStatement(node)) {
+	// FunctionDeclaration
+    if (
+        t.isFunctionDeclaration(node) ||
+        t.isFunctionExpression(node) ||
+        t.isArrowFunctionExpression(node)
+    ) {
+        countInBlock(node.body);
+    } else if (t.isBlockStatement(node)) {
         countInBlock(node);
     } else if (t.isIfStatement(node)) {
         if (t.isBlockStatement(node.consequent)) {
             countInBlock(node.consequent);
-        } else if (t.isStatement(node.consequent)) {
+        } else if (t.isStatement(node.consequent) && !shouldIgnoreStatementNode(node.consequent)) {
             count++;
         }
 
         if (t.isBlockStatement(node.alternate)) {
             countInBlock(node.alternate);
-        } else if (t.isStatement(node.alternate)) {
+        } else if (t.isStatement(node.alternate) && !shouldIgnoreStatementNode(node.alternate)) {
             count++;
         }
     } else if (
@@ -282,27 +277,25 @@ function getDirectChildStatementCount(path) {
     ) {
         if (t.isBlockStatement(node.body)) {
             countInBlock(node.body);
-        } else if (t.isStatement(node.body)) {
+        } else if (t.isStatement(node.body) && !shouldIgnoreStatementNode(node.body)) {
             count++;
         }
     } else if (t.isSwitchStatement(node)) {
         for (const switchCase of node.cases) {
             count += switchCase.consequent.filter(
-                stmt => t.isStatement(stmt)
+                stmt => t.isStatement(stmt) && !shouldIgnoreStatementNode(stmt)
             ).length;
         }
     } else if (t.isTryStatement(node)) {
-        if (t.isBlockStatement(node.block)) {
             countInBlock(node.block);
-        }
 
-        if (node.handler && t.isBlockStatement(node.handler.body)) {
-            countInBlock(node.handler.body);
-        }
+			if (node.handler) {
+				countInBlock(node.handler.body);
+			}
 
-        if (node.finalizer) {
-            countInBlock(node.finalizer);
-        }
+			if (node.finalizer) {
+				countInBlock(node.finalizer);
+			}
     }
 
     return count;
@@ -419,6 +412,38 @@ function sqlValue(value) {
     return "'" + String(value).replace(/'/g, "''") + "'";
 }
 
+function getKeyHash(statementKey) {
+    return crypto
+        .createHash("sha256")
+        .update(statementKey, "utf8")
+        .digest("hex");
+}
+
+function shouldIgnoreStatementNode(node) {
+    if (!t.isExpressionStatement(node)) {
+        return false;
+    }
+
+    const expr = node.expression;
+
+    if (t.isCallExpression(expr)) {
+        return ignoredCalls.has(getCalleeName(expr.callee));
+    }
+
+    if (
+        t.isAssignmentExpression(expr) &&
+        t.isCallExpression(expr.right)
+    ) {
+        return ignoredCalls.has(getCalleeName(expr.right.callee));
+    }
+
+    return false;
+}
+
+function shouldIgnoreStatement(stmtPath) {
+    return shouldIgnoreStatementNode(stmtPath.node);
+}
+
 // ------------------------------------------------------------
 // Main
 // ------------------------------------------------------------
@@ -471,6 +496,8 @@ if (process.argv.length === 3) {
 					 
 				const childStatementCount = getDirectChildStatementCount(path);
 				
+				const keyHash = getKeyHash(path.node.statementKey);
+				
 				/* console.log(
 				    `FileName: ${filename}`,
 					`Line: ${line}`,
@@ -484,8 +511,8 @@ if (process.argv.length === 3) {
 					`ChildStatements: ${childStatementCount}`
 				); */
 				
-				console.log("insert into jsstatements (file_path,parent_function,statement_type,function_order,type_order,statement_key,key_order,child_statements,statement_hash,condition_hash,forheader_hash,line_num) values('"
-			  +filename+"','"+path.node.fnName+"','"+path.node.type+"',"+path.node.functionOrder +","+path.node.typeOrder + ",'"+ path.node.statementKey+"',"+path.node.keyCount + ","+childStatementCount+","+sqlValue(hash)+","+sqlValue(conditionHash)+","+sqlValue(forHeaderHash)+","+line+");");
+				console.log("insert into jsstatements (file_path,parent_function,statement_type,function_order,type_order,key_order,child_statements,statement_hash,condition_hash,forheader_hash,key_hash,line_num) values('"
+			  +filename+"','"+path.node.fnName+"','"+path.node.type+"',"+path.node.functionOrder +","+path.node.typeOrder +","+path.node.keyCount + ","+childStatementCount+","+sqlValue(hash)+","+sqlValue(conditionHash)+","+sqlValue(forHeaderHash)+","+sqlValue(keyHash)+","+line+");");
 			
 			
 			}

@@ -10,10 +10,12 @@ const t = babel.types;
 let cnt = 0;
 
 const ignoredCalls = new Set([
+	"setcolumnwidth",
     "console.log",
     "SYSLog.log",
     "GFN.initScrSetting",
 	"GFN.SetGridResize",
+	"GFN.Setcolumnwidth",
     "RXCom.RemoveRows",
 	"factory.consoleprint"
 ]);
@@ -301,7 +303,10 @@ function getDirectChildStatementCount(path) {
     return count;
 }
 function getLoopHeaderHash(node) {
+	//console.log("#################################################################################################");
     if (t.isForStatement(node)) {
+		//debugForHeader(node);
+		//console.log("HASH:", getForHeaderHash(node));
         return getForHeaderHash(node);
     }
 
@@ -312,43 +317,77 @@ function getLoopHeaderHash(node) {
     return null;
 }
 
-function getLoopHeaderHash(node) {
-    if (t.isForStatement(node)) {
-        return getForHeaderHash(node);
-    }
+function debugForHeader(node) {
+    console.log("INIT:");
+    console.log(JSON.stringify(normalizeAst(node.init), null, 2));
 
-    if (t.isForInStatement(node) || t.isForOfStatement(node)) {
-        return getForInHeaderHash(node);
-    }
+    console.log("TEST:");
+    console.log(JSON.stringify(normalizeAst(node.test), null, 2));
 
-    return null;
+    console.log("UPDATE:");
+    console.log(JSON.stringify(normalizeAst(node.update), null, 2));
+
+    console.log("BODY TYPE:", node.body.type);
 }
 
+function normalizeAst(node) {
+    if (node === null || node === undefined) {
+        return null;
+    }
+
+    if (Array.isArray(node)) {
+        return node.map(normalizeAst);
+    }
+
+    if (typeof node !== "object") {
+        return node;
+    }
+
+    const ignoredProperties = new Set([
+        // Babel metadata
+        "start",
+        "end",
+        "loc",
+        "extra",
+        "leadingComments",
+        "trailingComments",
+        "innerComments",
+        "comments",
+
+        // Properties added by your program
+        "fnName",
+        "functionOrder",
+        "keyCount",
+        "statementKey",
+        "typeOrder"
+    ]);
+
+    const result = {};
+
+    for (const key of Object.keys(node).sort()) {
+        if (ignoredProperties.has(key)) {
+            continue;
+        }
+
+        result[key] = normalizeAst(node[key]);
+    }
+
+    return result;
+}
 function getForHeaderHash(node) {
     if (!t.isForStatement(node)) {
         return null;
     }
 
-    const headerAst = {
-        init: node.init,
-        test: node.test,
-        update: node.update
+    const header = {
+        init: normalizeAst(node.init),
+        test: normalizeAst(node.test),
+        update: normalizeAst(node.update)
     };
 
     return crypto
         .createHash("sha256")
-        .update(JSON.stringify(
-            JSON.parse(JSON.stringify(headerAst, (key, value) => {
-                if ([
-                    "start", "end", "loc",
-                    "leadingComments", "trailingComments",
-                    "innerComments", "extra"
-                ].includes(key)) {
-                    return undefined;
-                }
-                return value;
-            }))
-        ))
+        .update(JSON.stringify(header))
         .digest("hex")
         .substring(0, 16);
 }
@@ -427,14 +466,14 @@ function shouldIgnoreStatementNode(node) {
     const expr = node.expression;
 
     if (t.isCallExpression(expr)) {
-        return ignoredCalls.has(getCalleeName(expr.callee));
+        return isIgnoredCall(expr.callee);
     }
 
     if (
         t.isAssignmentExpression(expr) &&
         t.isCallExpression(expr.right)
     ) {
-        return ignoredCalls.has(getCalleeName(expr.right.callee));
+        return isIgnoredCall(expr.right.callee);
     }
 
     return false;
@@ -442,6 +481,32 @@ function shouldIgnoreStatementNode(node) {
 
 function shouldIgnoreStatement(stmtPath) {
     return shouldIgnoreStatementNode(stmtPath.node);
+}
+
+function isIgnoredCall(callee) {
+    const qualifiedName = getCalleeName(callee);
+    const functionName = getFunctionNameOnly(callee);
+
+    return ignoredCalls.has(qualifiedName) ||
+           ignoredCalls.has(functionName);
+}
+
+function getFunctionNameOnly(callee) {
+    if (t.isIdentifier(callee)) {
+        return callee.name;
+    }
+
+    if (t.isMemberExpression(callee)) {
+        if (t.isIdentifier(callee.property)) {
+            return callee.property.name;
+        }
+
+        if (t.isStringLiteral(callee.property)) {
+            return callee.property.value;
+        }
+    }
+
+    return null;
 }
 
 // ------------------------------------------------------------
@@ -489,6 +554,10 @@ if (process.argv.length === 3) {
 				const conditionHash = t.isIfStatement(path.node)
                 ? getStatementHash(path.node.test)
                 : null;
+				
+				//if (t.isforstatement(path.node)){
+				//	console.log("###############################메인에서##################################################################");
+				//}
 				
 				const forHeaderHash = (t.isForStatement(path.node) || t.isForInStatement(path.node) || t.isForOfStatement(path.node))
 				? getLoopHeaderHash(path.node)

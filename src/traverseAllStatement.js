@@ -25,7 +25,10 @@ const HASH_IGNORED_PROPERTIES = new Set([
     "functionOrder",
     "keyCount",
     "statementKey",
-    "typeOrder"
+    "typeOrder",
+	"function_name",
+	"callee_name",
+	"variable_name"
 ]);
 
 function normalizeCallTest(node) {
@@ -257,6 +260,15 @@ function assignStatementKeys(ast) {
             const fnName = getFunctionName(path);
             const type = node.type;
             const identifiers = getIdentifiers(node).join(".");
+			
+			// Function declaration name
+			node.function_name = getDeclaredFunctionName(node);
+
+			// Function call name
+			node.callee_name = getStatementCalleeName(node);
+
+			// VariableDeclaration names
+			node.variable_name = getVariableNames(node).join(",");
 
             // --------------------------------------------
             // 1. Existing unique statement key
@@ -546,6 +558,71 @@ function normalizeCallExpression(node) {
     return normalizeAst(node);
 }
 
+function getDeclaredFunctionName(node) {
+    if (t.isFunctionDeclaration(node) && node.id) {
+        return node.id.name;
+    }
+
+    return null;
+}
+
+function getStatementCalleeName(node) {
+    if (
+        t.isExpressionStatement(node) &&
+        t.isCallExpression(node.expression)
+    ) {
+        return getCalleeName(node.expression.callee);
+    }
+
+    return null;
+}
+
+function getVariableNames(node) {
+    if (!t.isVariableDeclaration(node)) {
+        return [];
+    }
+
+    return node.declarations.map(declaration => {
+        return getPatternNames(declaration.id);
+    }).flat();
+}
+
+function getPatternNames(pattern) {
+    if (t.isIdentifier(pattern)) {
+        return [pattern.name];
+    }
+
+    // var {a, b} = obj;
+    if (t.isObjectPattern(pattern)) {
+        return pattern.properties.flatMap(property => {
+            if (t.isRestElement(property)) {
+                return getPatternNames(property.argument);
+            }
+
+            return getPatternNames(property.value);
+        });
+    }
+
+    // var [a, b] = array;
+    if (t.isArrayPattern(pattern)) {
+        return pattern.elements
+            .filter(Boolean)
+            .flatMap(getPatternNames);
+    }
+
+    // var ...rest = value
+    if (t.isRestElement(pattern)) {
+        return getPatternNames(pattern.argument);
+    }
+
+    // var a = value (AssignmentPattern)
+    if (t.isAssignmentPattern(pattern)) {
+        return getPatternNames(pattern.left);
+    }
+
+    return [];
+}
+
 // ------------------------------------------------------------
 // Main
 // ------------------------------------------------------------
@@ -617,8 +694,8 @@ if (process.argv.length === 3) {
 					`ChildStatements: ${childStatementCount}`
 				); */
 				
-				console.log("insert into jsstatements (file_path,parent_function,statement_type,function_order,type_order,key_order,child_statements,statement_hash,condition_hash,forheader_hash,key_hash,line_num) values('"
-			  +filename+"','"+path.node.fnName+"','"+path.node.type+"',"+path.node.functionOrder +","+path.node.typeOrder +","+path.node.keyCount + ","+childStatementCount+","+sqlValue(hash)+","+sqlValue(conditionHash)+","+sqlValue(forHeaderHash)+","+sqlValue(keyHash)+","+line+");");
+				console.log("insert into jsstatements (file_path,parent_function,statement_type,function_name,callee_name,variable_name,function_order,type_order,key_order,child_statements,statement_hash,condition_hash,forheader_hash,key_hash,line_num) values('"
+			  +filename+"','"+path.node.fnName+"','"+path.node.type+"',"+sqlValue(path.node.function_name)+","+sqlValue(path.node.callee_name)+","+sqlValue(path.node.variable_name)+","+path.node.functionOrder +","+path.node.typeOrder +","+path.node.keyCount + ","+childStatementCount+","+sqlValue(hash)+","+sqlValue(conditionHash)+","+sqlValue(forHeaderHash)+","+sqlValue(keyHash)+","+line+");");
 			
 			
 			}

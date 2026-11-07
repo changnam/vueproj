@@ -38,6 +38,7 @@ const normalizeCallFunctions = new Map([
 ]);
 
 const ignoredCalls = new Set([
+    "screen_on_size",
 	"setcolumnwidth",
     "console.log",
     "SYSLog.log",
@@ -472,42 +473,57 @@ function sqlValue(value) {
 
     return "'" + String(value).replace(/'/g, "''") + "'";
 }
-function getKeyHash(node) {
+
+function getKeyString(node) {
     let keyNode = node;
 
     if (t.isFunctionDeclaration(node)) {
         keyNode = t.cloneNode(node, true);
 
-        // Ignore function parameters
-        keyNode.params = [];
-
         // Remove ignored statements
         removeIgnoredStatements(keyNode.body);
+
+        // Ignore function parameters if required
+        keyNode.params = [];
     }
 
     const identifiers = getIdentifiers(keyNode);
-    const key = identifiers.join(".");
+
+    return identifiers.join(".");
+}
+
+function getKeyHash(node) {
+    const keyString = getKeyString(node);
 
     return crypto.createHash("sha256")
-        .update(key, "utf8")
+        .update(keyString, "utf8")
         .digest("hex");
 }
+
 function removeIgnoredStatements(node) {
     if (!node || typeof node !== "object") {
         return;
     }
 
-    // Remove ignored statements from block bodies
-    if (t.isBlockStatement(node)) {
-        node.body = node.body.filter(stmt =>
-            !shouldIgnoreStatementNode(stmt)
-        );
-
-        node.body.forEach(removeIgnoredStatements);
+    if (Array.isArray(node)) {
         return;
     }
 
-    // Handle nested AST nodes
+    // Remove ignored statements from BlockStatement
+    if (t.isBlockStatement(node)) {
+        node.body = node.body.filter(
+            stmt => !shouldIgnoreStatementNode(stmt)
+        );
+    }
+
+    // Remove ignored statements from SwitchCase
+    if (t.isSwitchCase(node)) {
+        node.consequent = node.consequent.filter(
+            stmt => !shouldIgnoreStatementNode(stmt)
+        );
+    }
+
+    // Recursively process child nodes
     for (const key of Object.keys(node)) {
         if (HASH_IGNORED_PROPERTIES.has(key)) {
             continue;
@@ -661,6 +677,33 @@ function getPatternNames(pattern) {
     return [];
 }
 
+function sqlClobValue(value, maxBytes = 4000) {
+    const chunks = [];
+    let chunk = "";
+    let byteLength = 0;
+
+    for (const char of String(value ?? "")) {
+        const charBytes = Buffer.byteLength(char, "utf8");
+
+        if (byteLength + charBytes > maxBytes && chunk.length > 0) {
+            chunks.push(chunk);
+            chunk = "";
+            byteLength = 0;
+        }
+
+        chunk += char;
+        byteLength += charBytes;
+    }
+
+    if (chunk.length > 0 || chunks.length === 0) {
+        chunks.push(chunk);
+    }
+
+    return chunks
+        .map(value => `TO_CLOB(${sqlValue(value)})`)
+        .join(" || ");
+}
+
 // ------------------------------------------------------------
 // Main
 // ------------------------------------------------------------
@@ -684,6 +727,8 @@ if (process.argv.length === 3) {
     });
 	
 	filename = filename.replaceAll("\\","\\\\");
+	
+	const functionKeyRecords = [];
 	
 	assignStatementKeys(ast);
 
@@ -717,8 +762,28 @@ if (process.argv.length === 3) {
 					 
 				const childStatementCount = getDirectChildStatementCount(path);
 				
+				if (t.isFunctionDeclaration(path.node)) {
+
+					const functionName = path.node.id
+						? path.node.id.name
+						: null;
+
+					const functionKeyString = getKeyString(path.node);
+					const functionKeyHash = getKeyHash(path.node);
+
+					functionKeyRecords.push({
+						file_path: filename,
+						parent_function: path.node.fnName,
+						function_name: functionName,
+						key_hash: functionKeyHash,
+						line_num: line,
+						key_string: functionKeyString
+					});
+				}
+
+				// Generate statement-level hash separately
 				const keyHash = getKeyHash(path.node);
-				
+
 				/* console.log(
 				    `FileName: ${filename}`,
 					`Line: ${line}`,
@@ -739,4 +804,12 @@ if (process.argv.length === 3) {
 			}
 		}
 	});
+	
+	for (const record of functionKeyRecords) {
+		
+		const sql = `
+insert INTO jsfunction_keys(file_path,parent_function,function_name,key_hash,line_num,key_string) VALUES(${sqlValue(record.file_path)},${sqlValue(record.parent_function)},${sqlValue(record.function_name)},${sqlValue(record.key_hash)},${record.line_num},${sqlClobValue(record.key_string)});`;	
+
+		console.log(sql);
+	}
 }

@@ -31,6 +31,24 @@ const HASH_IGNORED_PROPERTIES = new Set([
 	"variable_name"
 ]);
 
+const normalizeCallFunctions = new Map([
+    ["screen.applytranmap", 3],
+    ["GFN.SomeFunction", 2],
+    ["factory.consoleprint", 1]
+]);
+
+const ignoredCalls = new Set([
+	"setcolumnwidth",
+    "console.log",
+    "SYSLog.log",
+    "GFN.initScrSetting",
+	"GFN.SetGridResize",
+	"GFN.Setcolumnwidth",
+    "RXCom.RemoveRows",
+	"factory.consoleprint",
+	"GFN.SetGridResize"
+]);
+
 function normalizeCallTest(node) {
     if (t.isExpressionStatement(node)) {
         node = node.expression;
@@ -108,24 +126,6 @@ function normalizeAst(node) {
     return result;
 }
 
-
-const normalizeCallFunctions = new Map([
-    ["screen.applytranmap", 3],
-    ["GFN.SomeFunction", 2],
-    ["factory.consoleprint", 1]
-]);
-
-const ignoredCalls = new Set([
-	"setcolumnwidth",
-    "console.log",
-    "SYSLog.log",
-    "GFN.initScrSetting",
-	"GFN.SetGridResize",
-	"GFN.Setcolumnwidth",
-    "RXCom.RemoveRows",
-	"factory.consoleprint"
-]);
-
 function getCalleeName(callee) {
     if (t.isIdentifier(callee)) {
         return callee.name;
@@ -201,40 +201,35 @@ function getFunctionName(path) {
 
     return "<anonymous>";
 }
-
-function getIdentifiers(node) {
+function getIdentifiers(node, options = {}) {
     const names = new Set();
 
-    function visit(n) {
+    function visit(n, isRoot = false) {
         if (!n || typeof n !== "object") return;
 
-        if (t.isIdentifier(n)) {
-            names.add(n.name);
+        if (Array.isArray(n)) {
+            n.forEach(item => visit(item));
             return;
         }
 
-        // Ignore location and comment metadata.
+        if (t.isIdentifier(n)) {
+            if (!options.ignoreNames?.has(n.name)) {
+                names.add(n.name);
+            }
+            return;
+        }
+
         for (const [key, value] of Object.entries(n)) {
-            if (
-                key === "loc" ||
-                key === "start" ||
-                key === "end" ||
-                key === "leadingComments" ||
-                key === "trailingComments" ||
-                key === "innerComments"
-            ) {
+            if (HASH_IGNORED_PROPERTIES.has(key)) {
                 continue;
             }
 
-            if (Array.isArray(value)) {
-                value.forEach(visit);
-            } else if (value && typeof value === "object") {
-                visit(value);
-            }
+            visit(value);
         }
     }
 
     visit(node);
+
     return [...names].sort();
 }
 
@@ -477,12 +472,55 @@ function sqlValue(value) {
 
     return "'" + String(value).replace(/'/g, "''") + "'";
 }
+function getKeyHash(node) {
+    let keyNode = node;
 
-function getKeyHash(statementKey) {
-    return crypto
-        .createHash("sha256")
-        .update(statementKey, "utf8")
+    if (t.isFunctionDeclaration(node)) {
+        keyNode = t.cloneNode(node, true);
+
+        // Ignore function parameters
+        keyNode.params = [];
+
+        // Remove ignored statements
+        removeIgnoredStatements(keyNode.body);
+    }
+
+    const identifiers = getIdentifiers(keyNode);
+    const key = identifiers.join(".");
+
+    return crypto.createHash("sha256")
+        .update(key, "utf8")
         .digest("hex");
+}
+function removeIgnoredStatements(node) {
+    if (!node || typeof node !== "object") {
+        return;
+    }
+
+    // Remove ignored statements from block bodies
+    if (t.isBlockStatement(node)) {
+        node.body = node.body.filter(stmt =>
+            !shouldIgnoreStatementNode(stmt)
+        );
+
+        node.body.forEach(removeIgnoredStatements);
+        return;
+    }
+
+    // Handle nested AST nodes
+    for (const key of Object.keys(node)) {
+        if (HASH_IGNORED_PROPERTIES.has(key)) {
+            continue;
+        }
+
+        const value = node[key];
+
+        if (Array.isArray(value)) {
+            value.forEach(removeIgnoredStatements);
+        } else if (value && typeof value === "object") {
+            removeIgnoredStatements(value);
+        }
+    }
 }
 
 function shouldIgnoreStatementNode(node) {
@@ -679,7 +717,7 @@ if (process.argv.length === 3) {
 					 
 				const childStatementCount = getDirectChildStatementCount(path);
 				
-				const keyHash = getKeyHash(path.node.statementKey);
+				const keyHash = getKeyHash(path.node);
 				
 				/* console.log(
 				    `FileName: ${filename}`,

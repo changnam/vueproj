@@ -1,9 +1,10 @@
-//CREATE TABLE jsstatements (file_path varchar2(1024),parent_function varchar2(256),statement_type varchar2(256), function_order NUMBER, type_order NUMBER, statement_key clob, key_order NUMBER,child_statements NUMBER, statement_hash varchar2(512),condition_hash varchar2(512), forheader_hash varchar2(512),key_hash varchar2(512),line_num number);
-//INSERT INTO jsstatements values('D:\\DBS\\project\\DSI\\screen\\common_module\\CCNFile.js','NtFileExists','ReturnStatement',2,1,'NtFileExists/ReturnStatement/CCNConst.CORE_FTP_MBS.NtFileExists.strFilePath',1,0,'0ace33398d6c2f69','0ace33398d6c2f69','0ace33398d6c2f69',1528);
+//CREATE TABLE jsstatements (file_path varchar2(1024),parent_function varchar2(256),statement_type varchar2(256), function_name varchar2(256), callee_name varchar2(256), variable_name varchar2(512),function_order NUMBER, type_order NUMBER, statement_key clob, key_order NUMBER,child_statements NUMBER, statement_hash varchar2(512),condition_hash varchar2(512), forheader_hash varchar2(512),key_hash varchar2(512), line_num number);
+//CREATE TABLE jsfunction_keys (file_path VARCHAR2(512),parent_function varchar2(512),function_name VARCHAR2(512),statement_hash varchar2(64),key_hash VARCHAR2(64),line_num  NUMBER,key_string  CLOB);
 
 const fs = require('fs');
 const babel = require('@babel/core');
 const crypto = require('crypto');
+//const generateCode = require("@babel/generator").default;
 
 const t = babel.types;
 
@@ -32,7 +33,8 @@ const HASH_IGNORED_PROPERTIES = new Set([
 ]);
 
 const normalizeCallFunctions = new Map([
-    ["screen.applytranmap", 3],
+    ["settabitemfocus", 1],
+	["screen.applytranmap", 3],
     ["GFN.SomeFunction", 2],
     ["factory.consoleprint", 1]
 ]);
@@ -50,6 +52,23 @@ const ignoredCalls = new Set([
 	"GFN.SetGridResize"
 ]);
 
+function getNormalizeArgCount(callee) {
+    const qualifiedName = getCalleeName(callee);
+    const functionName = getFunctionNameOnly(callee);
+
+    // 1. Qualified name has priority
+    if (normalizeCallFunctions.has(qualifiedName)) {
+        return normalizeCallFunctions.get(qualifiedName);
+    }
+
+    // 2. Function name only
+    if (normalizeCallFunctions.has(functionName)) {
+        return normalizeCallFunctions.get(functionName);
+    }
+
+    return null;
+}
+
 function normalizeCallTest(node) {
     if (t.isExpressionStatement(node)) {
         node = node.expression;
@@ -61,7 +80,7 @@ function normalizeCallTest(node) {
     }
 
     const calleeName = getCalleeName(node.callee);
-    const maxArgs = normalizeCallFunctions.get(calleeName);
+	const maxArgs = getNormalizeArgCount(node.callee);
 
     console.log("Callee:", calleeName);
     console.log("Max arguments:", maxArgs);
@@ -97,13 +116,11 @@ function normalizeAst(node) {
         t.isCallExpression(node) ||
         t.isOptionalCallExpression(node)
     ) {
-        const calleeName = getCalleeName(node.callee);
-
         let args = node.arguments;
+		
+		const maxArgs = getNormalizeArgCount(node.callee);
 
-        if (normalizeCallFunctions.has(calleeName)) {
-            const maxArgs = normalizeCallFunctions.get(calleeName);
-
+        if (maxArgs !== null) {
             args = args.slice(0, maxArgs);
         }
 
@@ -132,6 +149,7 @@ function getCalleeName(callee) {
         return callee.name;
     }
 
+	//callee 가 factory.consoleprint 또는 factory?.consoleprint 형태인 경우 , fully qualified name 을 리턴함. 이형태가 아니면 null 을 리턴 , 즉 full qualified name 만 지원
     if (
         t.isMemberExpression(callee) ||
         t.isOptionalMemberExpression(callee)
@@ -153,25 +171,39 @@ function getCalleeName(callee) {
 }
 
 function getStatementHash(node) {
-    const normalized = normalizeAst(node);
+
+    // Clone original AST to avoid modifying the traversal AST
+    const clonedNode = t.cloneNode(node, true);
+
+    // Remove ignored function-call statements
+    removeIgnoredStatements(clonedNode);
+
+    // Normalize AST
+    const normalized = normalizeAst(clonedNode); //HASH_IGNORED_PROPERTIES 를 제거한다.
+
     const json = JSON.stringify(normalized);
-
-    console.log("NORMALIZED AST:");
-    console.log(json);
-
-    console.log("HASH:");
-
+	
     const hash = crypto
         .createHash("sha256")
         .update(json)
         .digest("hex")
         .substring(0, 16);
 
-    console.log(hash);
-
+    // Debug InitScreen
+    if (
+        t.isFunctionDeclaration(node) &&
+        node.id?.name === "InitScreen"
+    ) {
+        console.log("\n========== HASH DEBUG ==========");
+        console.log("Function:", node.id.name);
+        console.log("JSON length:", json.length);
+        console.log("JSON:", json);
+        console.log("SHA256:", hash);
+        console.log("================================\n");
+    }
+	
     return hash;
 }
-
 
 function getFunctionName(path) {
     const fn = path.getFunctionParent();
@@ -500,46 +532,21 @@ function getKeyHash(node) {
         .digest("hex");
 }
 
-function removeIgnoredStatements(node) {
-    if (!node || typeof node !== "object") {
-        return;
-    }
-
-    if (Array.isArray(node)) {
-        return;
-    }
-
-    // Remove ignored statements from BlockStatement
-    if (t.isBlockStatement(node)) {
-        node.body = node.body.filter(
-            stmt => !shouldIgnoreStatementNode(stmt)
-        );
-    }
-
-    // Remove ignored statements from SwitchCase
-    if (t.isSwitchCase(node)) {
-        node.consequent = node.consequent.filter(
-            stmt => !shouldIgnoreStatementNode(stmt)
-        );
-    }
-
-    // Recursively process child nodes
-    for (const key of Object.keys(node)) {
-        if (HASH_IGNORED_PROPERTIES.has(key)) {
-            continue;
-        }
-
-        const value = node[key];
-
-        if (Array.isArray(value)) {
-            value.forEach(removeIgnoredStatements);
-        } else if (value && typeof value === "object") {
-            removeIgnoredStatements(value);
-        }
-    }
-}
-
 function shouldIgnoreStatementNode(node) {
+	// ---------------------------------------
+    // Ignore: var nhandel;
+    // ---------------------------------------
+    if (
+        t.isVariableDeclaration(node) &&
+        node.kind === "var" &&
+        node.declarations.length === 1 &&
+        t.isIdentifier(node.declarations[0].id, { name: "nhandel" }) &&
+        node.declarations[0].init === null
+    ) {
+        return true;
+    }
+	
+	//isIgnoredCall 은 callExpression 이므로 무조건 isExpressionStatement 여야 한다. 
     if (!t.isExpressionStatement(node)) {
         return false;
     }
@@ -547,14 +554,17 @@ function shouldIgnoreStatementNode(node) {
     const expr = node.expression;
 
     if (t.isCallExpression(expr)) {
+		//console.log("calling isIgnoredCall 1 ..");
         return isIgnoredCall(expr.callee);
     }
 
+	// assignment 와 callexpressing 이 합쳐진 경우, m_strToday = factory.getsystemtime("%Y%M%D"); 
     if (
         t.isAssignmentExpression(expr) &&
         t.isCallExpression(expr.right)
     ) {
-        return isIgnoredCall(expr.right.callee);
+        //console.log("calling isIgnoredCall 2 ..");
+		return isIgnoredCall(expr.right.callee);
     }
 
     return false;
@@ -565,8 +575,8 @@ function shouldIgnoreStatement(stmtPath) {
 }
 
 function isIgnoredCall(callee) {
-    const qualifiedName = getCalleeName(callee);
-    const functionName = getFunctionNameOnly(callee);
+    const qualifiedName = getCalleeName(callee); //qualifiedName 또는 null 값을 갖는다.
+    const functionName = getFunctionNameOnly(callee); //factory.consoleprint(), factory?.consoleprint(), consoleprint() 모둔 consoleprint 를 받음
 
     return ignoredCalls.has(qualifiedName) ||
            ignoredCalls.has(functionName);
@@ -574,15 +584,18 @@ function isIgnoredCall(callee) {
 
 function getFunctionNameOnly(callee) {
     if (t.isIdentifier(callee)) {
+		//console.log("returning callee.name..: "+callee.name);
         return callee.name;
     }
 
-    if (t.isMemberExpression(callee)) {
+    if (t.isMemberExpression(callee)|| t.isOptionalMemberExpression(callee)) {
         if (t.isIdentifier(callee.property)) {
+			//console.log("returning callee.property.name..: "+callee.property.name);
             return callee.property.name;
         }
 
         if (t.isStringLiteral(callee.property)) {
+			//console.log("returning callee.property.value..: "+callee.property.value);
             return callee.property.value;
         }
     }
@@ -591,20 +604,19 @@ function getFunctionNameOnly(callee) {
 }
 
 function normalizeCallExpression(node) {
-    if (!t.isCallExpression(node)) {
+    if (!t.isCallExpression(node) && !t.isOptionalCallExpression(node)) {
         return normalizeAst(node);
     }
 
-    const calleeName = getCalleeName(node.callee);
-
-    // Normalize only selected functions
-    if (normalizeCallFunctions.has(calleeName)) {
-
+	// Qualified name is checked first; function name only is fallback.
+    const maxArgs = getNormalizeArgCount(node.callee);
+	
+    if (maxArgs !== null) {
         return {
-            type: "CallExpression",
+            type: node.type,
             callee: normalizeAst(node.callee),
             arguments: node.arguments
-                .slice(0, 3)
+                .slice(0, maxArgs)
                 .map(arg => normalizeAst(arg))
         };
     }
@@ -704,6 +716,65 @@ function sqlClobValue(value, maxBytes = 4000) {
         .join(" || ");
 }
 
+function isIgnoredStatement(node) {
+
+    if (!node) {
+        return false;
+    }
+
+    if (t.isExpressionStatement(node)) {
+        const expr = node.expression;
+
+        if (
+            t.isCallExpression(expr) ||
+            t.isOptionalCallExpression(expr)
+        ) {
+            return isIgnoredCall(expr.callee);
+        }
+    }
+
+    return false;
+}
+
+function removeIgnoredStatements(node) {
+
+    if (!node || typeof node !== "object") {
+        return;
+    }
+
+    // Process arrays of AST nodes
+    if (Array.isArray(node)) {
+        for (let i = node.length - 1; i >= 0; i--) {
+
+            const item = node[i];
+
+            if (shouldIgnoreStatementNode(item)) {
+                //console.log(
+                //    "[IGNORED STATEMENT]",
+                //    generateCode(item)
+                //);
+
+                node.splice(i, 1);
+                continue;
+            }
+
+            removeIgnoredStatements(item);
+        }
+
+        return;
+    }
+
+    // Recursively process child nodes
+    for (const key of Object.keys(node)) {
+
+        if (HASH_IGNORED_PROPERTIES.has(key)) {
+            continue;
+        }
+
+        removeIgnoredStatements(node[key]);
+    }
+}
+
 // ------------------------------------------------------------
 // Main
 // ------------------------------------------------------------
@@ -737,7 +808,7 @@ if (process.argv.length === 3) {
 
 	babel.traverse(ast, {
 		enter(path) {
-
+			// 모든 path 에 대해서 ignoredCall 에 있는지 검사 , 리턴값이 true 이면 다음 path 로 넘어감
 			if (shouldIgnoreStatement(path)) {
 				return;
 			}
@@ -748,7 +819,7 @@ if (process.argv.length === 3) {
                 ? path.node.loc.start.line
                 : "<unknown>";
 
-				const hash = getStatementHash(path.node);
+				const hash = getStatementHash(path.node); // normalize 된 AST 로부터 구하므로 HASH_IGNORED_PROPERTIES , normalizeCallFunctions 모두 적용되어 계산됨. 
 
 				// Hash of the condition AST for IfStatement
 				const conditionHash = t.isIfStatement(path.node)
@@ -778,6 +849,7 @@ if (process.argv.length === 3) {
 						file_path: filename,
 						parent_function: path.node.fnName,
 						function_name: functionName,
+						statement_hash: hash,
 						key_hash: functionKeyHash,
 						line_num: line,
 						key_string: functionKeyString
@@ -811,7 +883,7 @@ if (process.argv.length === 3) {
 	for (const record of functionKeyRecords) {
 		
 		const sql = `
-insert INTO jsfunction_keys(file_path,parent_function,function_name,key_hash,line_num,key_string) VALUES(${sqlValue(record.file_path)},${sqlValue(record.parent_function)},${sqlValue(record.function_name)},${sqlValue(record.key_hash)},${record.line_num},${sqlClobValue(record.key_string)});`;	
+insert INTO jsfunction_keys(file_path,parent_function,function_name,statement_hash,key_hash,line_num,key_string) VALUES(${sqlValue(record.file_path)},${sqlValue(record.parent_function)},${sqlValue(record.function_name)},${sqlValue(record.statement_hash)},${sqlValue(record.key_hash)},${record.line_num},${sqlClobValue(record.key_string)});`;	
 
 		console.log(sql);
 	}

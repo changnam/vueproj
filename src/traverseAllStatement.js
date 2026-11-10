@@ -40,6 +40,7 @@ const normalizeCallFunctions = new Map([
 ]);
 
 const ignoredCalls = new Set([
+    "setrect",
     "screen_on_size",
 	"setcolumnwidth",
     "console.log",
@@ -49,7 +50,8 @@ const ignoredCalls = new Set([
 	"GFN.Setcolumnwidth",
     "RXCom.RemoveRows",
 	"factory.consoleprint",
-	"GFN.SetGridResize"
+	"GFN.SetGridResize",
+	"TRAN.TranTimer.point"
 ]);
 
 function getNormalizeArgCount(callee) {
@@ -118,6 +120,15 @@ function normalizeAst(node) {
     ) {
         let args = node.arguments;
 		
+		// Ignore exactly one null argument
+		if (
+			args.length === 1 &&
+			t.isNullLiteral(args[0])
+		) {
+			args = [];
+		}
+
+		// Apply configured argument normalization
 		const maxArgs = getNormalizeArgCount(node.callee);
 
         if (maxArgs !== null) {

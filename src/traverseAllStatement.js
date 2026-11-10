@@ -1,4 +1,4 @@
-//CREATE TABLE jsstatements (file_path varchar2(1024),parent_function varchar2(256),statement_type varchar2(256), function_name varchar2(256), callee_name varchar2(256), variable_name varchar2(512),function_order NUMBER, type_order NUMBER, statement_key clob, key_order NUMBER,child_statements NUMBER, statement_hash varchar2(512),condition_hash varchar2(512), forheader_hash varchar2(512),key_hash varchar2(512), line_num number);
+//CREATE TABLE jsstatements (file_path varchar2(1024),parent_function varchar2(256),statement_type varchar2(256), function_name varchar2(256), callee_name varchar2(256), variable_name varchar2(512),function_order NUMBER, type_order NUMBER, statement_key clob, key_order NUMBER,child_statements NUMBER, statement_hash varchar2(512),condition_hash varchar2(512), forheader_hash varchar2(512),key_hash varchar2(512), line_num number, block_id number, type_order_in_block number);
 //CREATE TABLE jsfunction_keys (file_path VARCHAR2(512),parent_function varchar2(512),function_name VARCHAR2(512),statement_hash varchar2(64),key_hash VARCHAR2(64),line_num  NUMBER,key_string  CLOB);
 
 const fs = require('fs');
@@ -29,7 +29,9 @@ const HASH_IGNORED_PROPERTIES = new Set([
     "typeOrder",
 	"function_name",
 	"callee_name",
-	"variable_name"
+	"variable_name",
+	"blockId", 
+	"typeOrderInBlock"
 ]);
 
 const normalizeCallFunctions = new Map([
@@ -281,8 +283,64 @@ function assignStatementKeys(ast) {
     const keyCounters = new Map();
     const functionCounters = new Map();
     const typeCounters = new Map();
+	
+    // Block ID management
+    const blockIdsByFunction = new Map();
+    const blockCountersByFunction = new Map();
 
-    babel.traverse(ast, {
+    // Statement type order within each block
+    const typeOrderInBlockMap = new Map();
+
+
+    // --------------------------------------------------
+    // Find the nearest parent block
+    // --------------------------------------------------
+    function getParentBlockPath(path) {
+
+        return path.findParent(p =>
+            p.isBlockStatement() ||
+            p.isSwitchCase() ||
+            p.isProgram()
+        );
+    }
+
+    // --------------------------------------------------
+    // Get block ID within the parent function
+    // --------------------------------------------------
+    function getBlockId(path, functionId) {
+
+        const blockPath = getParentBlockPath(path);
+
+        // Program-level statements use block ID 0
+        if (!blockPath || blockPath.isProgram()) {
+            return 0;
+        }
+
+        let blockIds = blockIdsByFunction.get(functionId);
+
+        if (!blockIds) {
+            blockIds = new Map();
+            blockIdsByFunction.set(functionId, blockIds);
+        }
+
+        // Assign a new ID when this block is first encountered
+        if (!blockIds.has(blockPath.node)) {
+
+            const nextId =
+                (blockCountersByFunction.get(functionId) || 0) + 1;
+
+            blockCountersByFunction.set(functionId, nextId);
+
+            blockIds.set(blockPath.node, nextId);
+        }
+
+        return blockIds.get(blockPath.node);
+    }
+
+    // --------------------------------------------------
+    // Traverse statements
+    // --------------------------------------------------
+	babel.traverse(ast, {
         enter(path) {
             const node = path.node;
 
@@ -349,6 +407,35 @@ function assignStatementKeys(ast) {
 
             countersByType.set(type, typeOrder);
             node.typeOrder = typeOrder;
+			
+            // --------------------------------------------------
+            // 4. Block ID
+            // --------------------------------------------------
+
+            const blockId = getBlockId(path, functionId);
+
+            node.blockId = blockId;
+
+            // --------------------------------------------------
+            // 5. Statement type order within block
+            // --------------------------------------------------
+
+            let countersByBlock = typeOrderInBlockMap.get(functionId);
+
+            if (!countersByBlock) {
+                countersByBlock = new Map();
+                typeOrderInBlockMap.set(functionId, countersByBlock);
+            }
+
+            const blockTypeKey = `${blockId}|${type}`;
+
+            const typeOrderInBlock =
+                (countersByBlock.get(blockTypeKey) || 0) + 1;
+
+            countersByBlock.set(blockTypeKey, typeOrderInBlock);
+
+            node.typeOrderInBlock = typeOrderInBlock;
+	
         }
     });
 }
@@ -883,8 +970,8 @@ if (process.argv.length === 3) {
 					`ChildStatements: ${childStatementCount}`
 				); */
 				
-				console.log("insert into jsstatements (file_path,parent_function,statement_type,function_name,callee_name,variable_name,function_order,type_order,key_order,child_statements,statement_hash,condition_hash,forheader_hash,key_hash,line_num) values('"
-			  +filename+"','"+path.node.fnName+"','"+path.node.type+"',"+sqlValue(path.node.function_name)+","+sqlValue(path.node.callee_name)+","+sqlValue(path.node.variable_name)+","+path.node.functionOrder +","+path.node.typeOrder +","+path.node.keyCount + ","+childStatementCount+","+sqlValue(hash)+","+sqlValue(conditionHash)+","+sqlValue(forHeaderHash)+","+sqlValue(keyHash)+","+line+");");
+				console.log("insert into jsstatements (file_path,parent_function,statement_type,function_name,callee_name,variable_name,function_order,type_order,block_id,type_order_in_block,key_order,child_statements,statement_hash,condition_hash,forheader_hash,key_hash,line_num) values('"
+			  +filename+"','"+path.node.fnName+"','"+path.node.type+"',"+sqlValue(path.node.function_name)+","+sqlValue(path.node.callee_name)+","+sqlValue(path.node.variable_name)+","+path.node.functionOrder +","+path.node.typeOrder +","+path.node.blockId+","+path.node.typeOrderInBlock+","+path.node.keyCount + ","+childStatementCount+","+sqlValue(hash)+","+sqlValue(conditionHash)+","+sqlValue(forHeaderHash)+","+sqlValue(keyHash)+","+line+");");
 			
 			
 			}

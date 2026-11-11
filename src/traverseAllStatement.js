@@ -1715,16 +1715,31 @@ function removeFirstDuplicateFunctions(code) {
      * would change the indexes of later ranges.
      */
     removeRanges.sort((a, b) => b.start - a.start);
+	
+	/*
+	 * Preserve original source positions.
+	 *
+	 * Replace duplicate function characters with spaces,
+	 * but keep all newline characters unchanged.
+	 */
+	let result = code;
 
+	for (const range of removeRanges) {
 
-    let result = code;
+		const removedText = result.substring(
+			range.start,
+			range.end
+		);
 
-    for (const range of removeRanges) {
-        result =
-            result.substring(0, range.start) +
-            result.substring(range.end);
-    }
+		// Preserve CR/LF characters and replace everything else with spaces
+		const maskedText = removedText.replace(/[^\r\n]/g, ' ');
 
+		result =
+			result.substring(0, range.start) +
+			maskedText +
+			result.substring(range.end);
+	}
 
-    return result;
+	return result;
+
 }

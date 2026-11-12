@@ -103,6 +103,7 @@ function normalizeCallTest(node) {
 }
 
 function normalizeAst(node) {
+
     if (node === null || node === undefined) {
         return null;
     }
@@ -115,49 +116,75 @@ function normalizeAst(node) {
         return node;
     }
 
+
+    // ==================================================
     // Handle function calls explicitly
+    // ==================================================
+
     if (
         t.isCallExpression(node) ||
         t.isOptionalCallExpression(node)
     ) {
-        let args = node.arguments;
-		
-		// Ignore exactly one null argument
-		if (
-			args.length === 1 &&
-			t.isNullLiteral(args[0])
-		) {
-			args = [];
-		}
 
-		// Apply configured argument normalization
-		const maxArgs = getNormalizeArgCount(node.callee);
+        let args = node.arguments || [];
+
+
+        // --------------------------------------------------
+        // Step 1. Ignore ALL null arguments
+        // --------------------------------------------------
+
+        args = args.filter(arg =>
+            !t.isNullLiteral(arg)
+        );
+
+
+        // --------------------------------------------------
+        // Step 2. Apply configured argument normalization
+        // --------------------------------------------------
+
+        const maxArgs = getNormalizeArgCount(node.callee);
 
         if (maxArgs !== null) {
             args = args.slice(0, maxArgs);
         }
 
+
+        // --------------------------------------------------
+        // Step 3. Normalize arguments
+        // --------------------------------------------------
+
         return {
             type: node.type,
             callee: normalizeAst(node.callee),
-            arguments: args.map(normalizeAst)
+            arguments: args.map(arg => normalizeAst(arg))
         };
     }
+
+
+    // ==================================================
+    // Handle other AST nodes
+    // ==================================================
 
     const result = {};
 
     for (const key of Object.keys(node).sort()) {
+
         if (HASH_IGNORED_PROPERTIES.has(key)) {
             continue;
         }
 
+
+        // --------------------------------------------------
         // Ignore all parameters of FunctionDeclaration
+        // --------------------------------------------------
+
         if (
             node.type === "FunctionDeclaration" &&
             key === "params"
         ) {
             continue;
         }
+
 
         result[key] = normalizeAst(node[key]);
     }
@@ -213,7 +240,7 @@ function getStatementHash(node) {
     // Debug InitScreen
     if (
         t.isFunctionDeclaration(node) &&
-        node.id?.name === "btn_eForm_on_mouseup"
+        node.id?.name === "on_AprComplete"
     ) {
         console.log("\n========== HASH DEBUG ==========");
         console.log("Function:", node.id.name);

@@ -907,6 +907,137 @@ function removeIgnoredStatements(node) {
         removeIgnoredStatements(node[key]);
     }
 }
+/*
+function assignBlockFlags(ast) {
+
+    function isTargetCall(callNode) {
+
+        const calleeName = getCalleeName(callNode.callee);
+        const args = callNode.arguments;
+
+        const isSetScreenSize =
+            calleeName &&
+            calleeName.split(".").pop() === "SetScreenSize";
+
+        const isCreateImageObject =
+            calleeName === "screen.createobject" &&
+            args.length > 0 &&
+            t.isIdentifier(args[0], {
+                name: "XFD_CTRLKIND_IMAGE"
+            });
+
+        return isSetScreenSize || isCreateImageObject;
+    }
+
+    babel.traverse(ast, {
+
+        BlockStatement(path) {
+
+            let found = false;
+
+            path.traverse({
+
+                // Ignore nested functions
+                Function(innerPath) {
+                    innerPath.skip();
+                },
+
+                CallExpression(callPath) {
+
+                    if (isTargetCall(callPath.node)) {
+                        found = true;
+                        callPath.stop();
+                    }
+                },
+
+                OptionalCallExpression(callPath) {
+
+                    if (isTargetCall(callPath.node)) {
+                        found = true;
+                        callPath.stop();
+                    }
+                }
+
+            });
+
+            path.node.hasSetScreenSize = found;
+        }
+    });
+}
+*/
+
+function assignBlockFlags(ast) {
+
+    function isTargetCall(callNode) {
+
+        const calleeName = getCalleeName(callNode.callee);
+        const args = callNode.arguments;
+
+        return (
+            calleeName &&
+            calleeName.split(".").pop() === "SetScreenSize"
+        ) || (
+            calleeName === "screen.createobject" &&
+            args.length > 0 &&
+            t.isIdentifier(args[0], {
+                name: "XFD_CTRLKIND_IMAGE"
+            })
+        );
+    }
+
+    function hasTargetCallInDirectStatement(statementPath) {
+
+        let found = false;
+
+        statementPath.traverse({
+
+            // Do not search inside nested blocks.
+            BlockStatement(innerPath) {
+                innerPath.skip();
+            },
+
+            // Do not search inside nested functions.
+            Function(innerPath) {
+                innerPath.skip();
+            },
+
+            CallExpression(callPath) {
+                if (isTargetCall(callPath.node)) {
+                    found = true;
+                    callPath.stop();
+                }
+            },
+
+            OptionalCallExpression(callPath) {
+                if (isTargetCall(callPath.node)) {
+                    found = true;
+                    callPath.stop();
+                }
+            }
+        });
+
+        return found;
+    }
+
+    babel.traverse(ast, {
+
+        BlockStatement(path) {
+
+            let found = false;
+
+            // Inspect each direct child statement.
+            for (const statementPath of path.get("body")) {
+
+                if (hasTargetCallInDirectStatement(statementPath)) {
+                    found = true;
+                    break;
+                }
+            }
+
+            path.node.hasSetScreenSize = found;
+        }
+    });
+}
 
 // ------------------------------------------------------------
 // Main
@@ -937,8 +1068,13 @@ if (process.argv.length === 3) {
 	
 	const functionKeyRecords = [];
 	
+	// Step 1. Assign block flags
+	assignBlockFlags(ast);
+
+	// Step 2. Assign statement keys and block IDs
 	assignStatementKeys(ast);
 
+	// Step 3. Generate SQL
 	babel.traverse(ast, {
 		enter(path) {
 			// 모든 path 에 대해서 ignoredCall 에 있는지 검사 , 리턴값이 true 이면 다음 path 로 넘어감
@@ -1005,8 +1141,8 @@ if (process.argv.length === 3) {
 					`ChildStatements: ${childStatementCount}`
 				); */
 				
-				console.log("insert into jsstatements (file_path,parent_function,statement_type,function_name,callee_name,variable_name,function_order,type_order,block_id,type_order_in_block,key_order,child_statements,statement_hash,condition_hash,forheader_hash,key_hash,line_num) values('"
-			  +filename+"','"+path.node.fnName+"','"+path.node.type+"',"+sqlValue(path.node.function_name)+","+sqlValue(path.node.callee_name)+","+sqlValue(path.node.variable_name)+","+path.node.functionOrder +","+path.node.typeOrder +","+path.node.blockId+","+path.node.typeOrderInBlock+","+path.node.keyCount + ","+childStatementCount+","+sqlValue(hash)+","+sqlValue(conditionHash)+","+sqlValue(forHeaderHash)+","+sqlValue(keyHash)+","+line+");");
+				console.log("insert into jsstatements (file_path,parent_function,statement_type,function_name,callee_name,variable_name,block_flag,function_order,type_order,block_id,type_order_in_block,key_order,child_statements,statement_hash,condition_hash,forheader_hash,key_hash,line_num) values('"
+			+filename+"','"+path.node.fnName+"','"+path.node.type+"',"+sqlValue(path.node.function_name)+","+sqlValue(path.node.callee_name)+","+sqlValue(path.node.variable_name)+","+sqlValue(path.node.hasSetScreenSize)+","+path.node.functionOrder +","+path.node.typeOrder +","+path.node.blockId+","+path.node.typeOrderInBlock+","+path.node.keyCount + ","+childStatementCount+","+sqlValue(hash)+","+sqlValue(conditionHash)+","+sqlValue(forHeaderHash)+","+sqlValue(keyHash)+","+line+");");
 			
 			
 			}

@@ -151,6 +151,14 @@ function normalizeAst(node) {
             continue;
         }
 
+        // Ignore all parameters of FunctionDeclaration
+        if (
+            node.type === "FunctionDeclaration" &&
+            key === "params"
+        ) {
+            continue;
+        }
+
         result[key] = normalizeAst(node[key]);
     }
 
@@ -205,7 +213,7 @@ function getStatementHash(node) {
     // Debug InitScreen
     if (
         t.isFunctionDeclaration(node) &&
-        node.id?.name === "InitScreen"
+        node.id?.name === "btn_eForm_on_mouseup"
     ) {
         console.log("\n========== HASH DEBUG ==========");
         console.log("Function:", node.id.name);
@@ -1715,31 +1723,16 @@ function removeFirstDuplicateFunctions(code) {
      * would change the indexes of later ranges.
      */
     removeRanges.sort((a, b) => b.start - a.start);
-	
-	/*
-	 * Preserve original source positions.
-	 *
-	 * Replace duplicate function characters with spaces,
-	 * but keep all newline characters unchanged.
-	 */
-	let result = code;
 
-	for (const range of removeRanges) {
 
-		const removedText = result.substring(
-			range.start,
-			range.end
-		);
+    let result = code;
 
-		// Preserve CR/LF characters and replace everything else with spaces
-		const maskedText = removedText.replace(/[^\r\n]/g, ' ');
+    for (const range of removeRanges) {
+        result =
+            result.substring(0, range.start) +
+            result.substring(range.end);
+    }
 
-		result =
-			result.substring(0, range.start) +
-			maskedText +
-			result.substring(range.end);
-	}
 
-	return result;
-
+    return result;
 }
